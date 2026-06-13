@@ -2,33 +2,33 @@
 
 > A real-time, web-based traffic analysis system powered by YOLO11 and Ultralytics ObjectCounter — built for vehicle detection, tracking, and directional counting via an interactive browser dashboard.
 
-===
+---
 ## 📌 Table of Contents
 
-- [⚡ Quick Start](#-quick-start)
-- [📌 Project Overview](#-project-overview)
-- [✨ Features](#-features)
-- [🧠 How It Works](#-how-it-works)
-- [🏗 System Architecture](#-system-architecture)
-- [📁 Project Structure](#-project-structure)
-- [⚙️ Installation](#️-installation)
-- [🚀 Run Project](#-run-project)
-- [🎮 Usage Guide](#-usage-guide)
-- [⚙️ Configuration](#️-configuration)
-- [📊 Output Files](#-output-files)
-- [🧠 Core Algorithm](#-core-algorithm)
-- [⚠️ Limitations](#️-limitations)
-- [🔮 Future Improvements](#-future-improvements)
-- [👨‍💻 Author](#-author)
+- [0. ⚡ Quick Start](#-quick-start)
+- [1. 📌 Project Overview](#-project-overview)
+- [2. ✨ Features](#-features)
+- [3. 🧠 How It Works](#-how-it-works)
+- [4. 🏗 System Architecture](#-system-architecture)
+- [5. 📁 Project Structure](#-project-structure)
+- [6. ⚙️ Installation](#️-installation)
+- [7. 🚀 Run Project](#-run-project)
+- [8. 🎮 Usage Guide](#-usage-guide)
+- [9. ⚙️ Configuration](#️-configuration)
+- [10. 📊 Output Files](#-output-files)
+- [11. 🧠 Core Algorithm](#-core-algorithm)
+- [12. ⚠️ Limitations](#️-limitations)
+- [13. 🔮 Future Improvements](#-future-improvements)
+- [14. 👨‍💻 Author](#-author)
 
-===
-
-## ⚡ Quick Start
 ---
-## 🚀 Option 1 — Run with script (RECOMMENDED)
+
+## 0. ⚡ Quick Start
+
+### 🚀 Option 1 — Run with script (RECOMMENDED)
 ```bash
 # 1. Clone the repository
-git clone https://github.com/your-username/traffic_vehicle_system.git
+git clone https://github.com/longpham205/Traffic_vehicle_counting_system.git
 cd traffic_vehicle_system
 
 # Windows
@@ -37,7 +37,7 @@ run.bat
 # macOS / Linux
 bash run.sh
 ```
-## 🛠️ Option 2 — Manual setup (for development)
+### 🛠️ Option 2 — Manual setup (for development)
 ```bash
 # 1. Clone the repository
 git clone https://github.com/your-username/traffic_vehicle_system.git
@@ -66,7 +66,7 @@ http://localhost:8000
 
 ---
 
-## 📌 Project Overview
+## 1.📌 Project Overview
 
 This system solves the problem of manual traffic monitoring by providing an automated, AI-powered vehicle counting platform accessible from any browser.
 
@@ -78,7 +78,7 @@ The system requires no database. All session data is persisted as JSON and CSV f
 
 ---
 
-## ✨ Features
+## 2. ✨ Features
 
 ### 📁 Video Upload Mode
 - Upload `.mp4`, `.avi`, `.mov`, `.mkv`, or `.webm` files
@@ -121,7 +121,7 @@ The system requires no database. All session data is persisted as JSON and CSV f
 
 ---
 
-## ⚙️ How It Works
+## 3. ⚙️ How It Works
 
 ### Processing Pipeline
 
@@ -166,7 +166,7 @@ Ultralytics `ObjectCounter` monitors the centroid trajectory of each tracked obj
 
 ---
 
-## 🏗️ System Architecture
+## 4. 🏗️ System Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -211,7 +211,7 @@ Ultralytics `ObjectCounter` monitors the centroid trajectory of each tracked obj
 
 ---
 
-## 📂 Project Structure
+## 5. 📂 Project Structure
 
 ```
 traffic_vehicle_system/
@@ -240,7 +240,7 @@ traffic_vehicle_system/
 
 ---
 
-## 🛠️ Installation
+## 6. 🛠️ Installation
 
 ### Requirements
 - Python **3.10** or higher
@@ -278,7 +278,7 @@ pip install fastapi uvicorn ultralytics opencv-python psutil pyyaml python-multi
 
 ---
 
-## ▶️ Run Project
+## 7. ▶️ Run Project
 
 **Standard run:**
 ```bash
@@ -304,7 +304,7 @@ system:
 
 ---
 
-## 📖 Usage Guide
+## 8. 📖 Usage Guide
 
 ### Mode 1 — Upload Video
 
@@ -342,7 +342,7 @@ system:
 
 ---
 
-## 🔧 Configuration
+## 9. 🔧 Configuration
 
 All defaults are stored in `config.yaml`. Runtime configuration is done through the **Config drawer** in the UI.
 
@@ -357,7 +357,7 @@ All defaults are stored in `config.yaml`. Runtime configuration is done through 
 
 ---
 
-## 📁 Output Files
+## 10. 📁 Output Files
 
 Every completed session creates a folder under `results/`:
 
@@ -415,7 +415,7 @@ track_id,type,direction,time
 
 ---
 
-## 🧠 Core Algorithm
+## 11. 🧠 Core Algorithm
 
 ### YOLO Detection
 Each video frame is passed to a YOLO11 model, which outputs bounding boxes, class labels, and confidence scores for all detected objects. Only objects matching the configured class IDs and above the confidence threshold are kept.
@@ -431,7 +431,7 @@ When a centroid crosses the ROI, the direction of movement relative to the ROI n
 
 ---
 
-## ⚠️ Limitations
+## 12. ⚠️ Limitations
 
 - **CPU performance:** Processing speed is significantly slower on CPU-only machines. High-resolution videos or complex scenes may run below real-time speed. YOLO11n is recommended for CPU use.
 - **Tracking errors under occlusion:** When vehicles overlap for extended periods, trackers may lose or swap identities, leading to occasional double-counting or missed counts.
@@ -442,7 +442,7 @@ When a centroid crosses the ROI, the direction of movement relative to the ROI n
 
 ---
 
-## 🔮 Future Improvements
+## 13. 🔮 Future Improvements
 
 - **Multi-camera support** — run simultaneous sessions from multiple camera sources, each with its own ROI and counter
 - **Database integration** — replace JSON/CSV file storage with SQLite or PostgreSQL for scalable session querying and filtering
@@ -455,15 +455,16 @@ When a centroid crosses the ROI, the direction of movement relative to the ROI n
 
 ---
 
-## 👤 Author
+## 14. 👤 Author
 
 | Field | Detail |
 |-------|--------|
-| **Name** | Your Name |
-| **Institution** | Your University — Faculty of Information Technology |
+| **Name** | Long Pham |
+| **University** | HaUI - Hanoi University of Industry |
+| **Institution** | SICT - SCHOOL OF INFORMATION & COMMUNICATIONS TECHNOLOGY |
 | **Program** | Computer Science / Software Engineering |
 | **Year** | 2026 |
-| **Contact** | your.email@university.edu |
+| **Contact** | longtailieu304@gmail.com |
 
 ---
 
