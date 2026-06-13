@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Traffic Vehicle Counting System</title>
+  <link rel="stylesheet" href="/src/frontend/static/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ===== HEADER ===== -->
+<header class="header">
+  <div class="header-left">
+    <div class="logo-icon">🚗</div>
+    <div class="header-title">
+      <span class="title-main">Traffic Vehicle Counting System</span>
+      <span class="title-sub">Real-time AI-powered detection</span>
+    </div>
+  </div>
+  <div class="header-badges">
+    <div class="badge" id="badge-model">
+      <span class="badge-label">MODEL</span>
+      <span class="badge-value" id="hdr-model">YOLO11n</span>
+    </div>
+    <div class="badge" id="badge-tracker">
+      <span class="badge-label">TRACKER</span>
+      <span class="badge-value" id="hdr-tracker">ByteTrack</span>
+    </div>
+    <div class="badge status-badge" id="badge-status">
+      <span class="badge-label">STATUS</span>
+      <span class="badge-value status-text" id="hdr-status">IDLE</span>
+    </div>
+    <div class="badge" id="badge-fps">
+      <span class="badge-label">FPS</span>
+      <span class="badge-value" id="hdr-fps">—</span>
+    </div>
+    <button class="btn btn-sm btn-accent" id="btn-config" title="Configuration">⚙️ Config</button>
+  </div>
+</header>
+
+<!-- ===== MAIN LAYOUT ===== -->
+<div class="dashboard">
+
+  <!-- ===== LEFT PANEL ===== -->
+  <div class="panel left-panel">
+
+    <!-- Video Preview -->
+    <div class="card video-card">
+      <div class="card-header">
+        <span class="card-title">📹 Video Preview</span>
+        <div class="roi-toolbar">
+          <button class="btn btn-sm btn-outline" id="btn-draw-roi" title="Draw ROI">✏️ Draw ROI</button>
+          <button class="btn btn-sm btn-outline" id="btn-clear-roi" title="Clear ROI">🗑 Clear</button>
+          <button class="btn btn-sm btn-success" id="btn-save-roi" title="Save ROI">💾 Save ROI</button>
+        </div>
+      </div>
+
+      <!-- ROI Canvas wrapper -->
+      <div class="video-wrapper" id="video-wrapper">
+        <canvas id="roi-canvas"></canvas>
+        <img id="video-stream" src="" alt="Video stream" style="display:none;" />
+        <div class="video-placeholder" id="video-placeholder">
+          <div class="placeholder-icon">🎬</div>
+          <p>Upload a video or start camera to begin</p>
+        </div>
+      </div>
+
+      <!-- ROI mode indicator -->
+      <div class="roi-status" id="roi-status" style="display:none;">
+        <span id="roi-mode-label">Drawing: Polygon</span>
+        <span id="roi-point-count">Points: 0</span>
+      </div>
+
+      <div class="processing-progress">
+        <div class="processing-header">
+            <span>Processing Progress</span>
+            <span id="processing-percent">0%</span>
+        </div>
+        <div class="processing-bar-bg">
+            <div
+                id="processing-bar"
+                class="processing-bar-fill">
+            </div>
+        </div>
+        <div class="processing-info">
+            <span id="processing-frame">
+                0 / 0 frames
+            </span>
+            <span id="processing-eta">
+                ETA: --
+            </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Video Controls -->
+    <div class="card controls-card">
+      <div class="card-header">
+        <span class="card-title">🎮 Controls</span>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="action-buttons">
+        <button class="btn btn-primary btn-lg" id="btn-start">▶ Start</button>
+        <button class="btn btn-warning btn-lg" id="btn-pause" disabled>⏸ Pause</button>
+        <button class="btn btn-success btn-lg" id="btn-resume" disabled>▶ Resume</button>
+        <button class="btn btn-danger btn-lg" id="btn-stop" disabled>⏹ Stop</button>
+      </div>
+
+      <div class="mode-selector">
+        <label class="mode-option">
+          <input type="radio" name="mode" value="upload" checked id="mode-upload" />
+          <span>📁 Upload Video</span>
+        </label>
+        <label class="mode-option">
+          <input type="radio" name="mode" value="camera" id="mode-camera" />
+          <span>📷 Live Camera</span>
+        </label>
+      </div>
+
+      <!-- Upload Section -->
+      <div class="upload-section" id="upload-section">
+        <label class="upload-label" id="upload-label">
+          <input type="file" id="file-input" accept="video/*" style="display:none;" />
+          <span class="upload-icon">⬆️</span>
+          <span id="upload-text">Click to upload video</span>
+        </label>
+        <div class="upload-progress" id="upload-progress" style="display:none;">
+          <div class="progress-bar" id="progress-bar"></div>
+          <span id="progress-text">0%</span>
+        </div>
+      </div>
+
+      <!-- Camera Section -->
+      <div class="camera-section" id="camera-section" style="display:none;">
+        <label class="form-label">Camera Index</label>
+        <input type="number" class="form-input" id="camera-id" value="0" min="0" max="10" />
+        <button class="btn btn-sm btn-outline" id="btn-preview-camera">Preview</button>
+      </div>
+
+    </div>
+
+    <!-- Result Video Viewer -->
+    <div class="card result-card" id="result-section" style="display:none;">
+      <div class="card-header">
+        <span class="card-title">🎞 Result Video</span>
+        <div class="result-actions" id="result-actions">
+          <a class="btn btn-sm btn-outline" id="btn-download-video" download>⬇ Download</a>
+          <a class="btn btn-sm btn-outline" id="btn-export-csv">📊 Export CSV</a>
+        </div>
+      </div>
+      <video id="result-video" controls style="width:100%; border-radius:8px;"></video>
+    </div>
+
+  </div><!-- /left-panel -->
+
+
+  <!-- ===== RIGHT PANEL ===== -->
+  <div class="panel right-panel">
+
+    <!-- Stat Cards -->
+    <div class="stat-grid">
+      <div class="stat-card stat-in">
+        <div class="stat-icon">↙️</div>
+        <div class="stat-body">
+          <div class="stat-label">IN</div>
+          <div class="stat-value" id="stat-in">0</div>
+        </div>
+      </div>
+      <div class="stat-card stat-out">
+        <div class="stat-icon">↗️</div>
+        <div class="stat-body">
+          <div class="stat-label">OUT</div>
+          <div class="stat-value" id="stat-out">0</div>
+        </div>
+      </div>
+      <div class="stat-card stat-total">
+        <div class="stat-icon">🚦</div>
+        <div class="stat-body">
+          <div class="stat-label">TOTAL</div>
+          <div class="stat-value" id="stat-total">0</div>
+        </div>
+      </div>
+      <div class="stat-card stat-current">
+        <div class="stat-icon">👁️</div>
+        <div class="stat-body">
+          <div class="stat-label">CURRENT</div>
+          <div class="stat-value" id="stat-current">0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Vehicle Type Chart -->
+    <div class="card chart-card">
+      <div class="card-header">
+        <span class="card-title">🚗 Vehicle Type Statistics</span>
+      </div>
+      <canvas id="vehicle-chart" height="180"></canvas>
+    </div>
+
+    <!-- Session Information -->
+    <div class="card session-card">
+      <div class="card-header">
+        <span class="card-title">ℹ️ Session Information</span>
+      </div>
+      <div class="info-grid">
+        <div class="info-row">
+          <span class="info-label">Model</span>
+          <span class="info-value" id="info-model">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Tracker</span>
+          <span class="info-value" id="info-tracker">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Duration</span>
+          <span class="info-value" id="info-duration">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Avg FPS</span>
+          <span class="info-value" id="info-fps">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Session</span>
+          <span class="info-value session-id-text" id="info-session">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Resource Usage -->
+    <div class="card resource-card">
+      <div class="card-header">
+        <span class="card-title">💻 Resource Usage</span>
+      </div>
+      <div class="resource-bars">
+        <div class="resource-item">
+          <div class="resource-label">
+            <span>CPU</span>
+            <span id="cpu-pct">0%</span>
+          </div>
+          <div class="resource-bar-bg">
+            <div class="resource-bar-fill cpu-fill" id="cpu-bar" style="width:0%"></div>
+          </div>
+        </div>
+        <div class="resource-item">
+          <div class="resource-label">
+            <span>RAM</span>
+            <span id="ram-pct">0%</span>
+          </div>
+          <div class="resource-bar-bg">
+            <div class="resource-bar-fill ram-fill" id="ram-bar" style="width:0%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- History Panel -->
+    <div class="card history-card">
+      <div class="card-header">
+        <span class="card-title">📋 Session History</span>
+        <button class="btn btn-sm btn-outline" id="btn-refresh-history">↻ Refresh</button>
+      </div>
+      <div class="history-list" id="history-list">
+        <div class="empty-state">No sessions yet</div>
+      </div>
+    </div>
+
+  </div><!-- /right-panel -->
+
+</div><!-- /dashboard -->
+
+
+<!-- ===== CONFIG DRAWER ===== -->
+<div class="drawer-overlay" id="drawer-overlay"></div>
+<div class="config-drawer" id="config-drawer">
+  <div class="drawer-header">
+    <span class="drawer-title">⚙️ Configuration</span>
+    <button class="btn btn-sm btn-outline" id="btn-close-drawer">✕</button>
+  </div>
+  <div class="drawer-body">
+
+    <div class="form-group">
+      <label class="form-label">Detection Model</label>
+      <select class="form-select" id="cfg-model">
+        <option value="yolo11n.pt">YOLO11n (Nano – Fastest)</option>
+        <option value="yolo11s.pt">YOLO11s (Small)</option>
+        <option value="yolo11m.pt">YOLO11m (Medium – Accurate)</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Tracker</label>
+      <select class="form-select" id="cfg-tracker">
+        <option value="bytetrack.yaml">ByteTrack</option>
+        <option value="botsort.yaml">BoTSORT</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Confidence: <span id="conf-val"></span></label>
+      <input type="range" class="form-range" id="cfg-confidence" min="0.1" max="0.9" step="0.05" />
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">IoU Threshold: <span id="iou-val"></span></label>
+      <input type="range" class="form-range" id="cfg-iou" min="0.1" max="0.9" step="0.05" />
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Detect Classes</label>
+      <div class="checkbox-grid">
+        <label class="checkbox-item"><input type="checkbox" value="2" checked class="cls-check" /><span>🚗 Car</span></label>
+        <label class="checkbox-item"><input type="checkbox" value="3" checked class="cls-check" /><span>🏍 Motorcycle</span></label>
+        <label class="checkbox-item"><input type="checkbox" value="5" checked class="cls-check" /><span>🚌 Bus</span></label>
+        <label class="checkbox-item"><input type="checkbox" value="7" checked class="cls-check" /><span>🚛 Truck</span></label>
+        <label class="checkbox-item"><input type="checkbox" value="1" class="cls-check" /><span>🚲 Bicycle</span></label>
+        <label class="checkbox-item"><input type="checkbox" value="0" class="cls-check" /><span>🚶 Person</span></label>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">ROI Mode</label>
+      <div class="radio-group">
+        <label class="radio-item"><input type="radio" name="roi-mode" value="line" id="roi-line" /><span>— Line</span></label>
+        <label class="radio-item"><input type="radio" name="roi-mode" value="polygon" id="roi-polygon" checked /><span>⬜ Polygon</span></label>
+      </div>
+    </div>
+
+    <button class="btn btn-primary btn-full" id="btn-apply-config">Apply Configuration</button>
+  </div>
+</div>
+
+
+<!-- ===== HISTORY DETAIL MODAL ===== -->
+<div class="modal-overlay" id="modal-overlay" style="display:none;">
+  <div class="modal" id="session-modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">Session Detail</span>
+      <button class="btn btn-sm btn-outline" id="btn-close-modal">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-grid">
+        <div class="modal-left">
+          <video id="modal-video" controls style="width:100%; border-radius:8px; margin-bottom:12px;"></video>
+          <div class="modal-actions">
+            <a class="btn btn-sm btn-outline" id="modal-dl-video" download>⬇ Video</a>
+            <a class="btn btn-sm btn-outline" id="modal-dl-stats" >📊 Statistics CSV</a>
+            <a class="btn btn-sm btn-outline" id="modal-dl-log">📋 Vehicle Log CSV</a>
+          </div>
+          <div id="vehicle-cards" class="vehicle-cards"></div>
+        </div>
+        <div class="modal-right">
+          <canvas id="modal-chart" height="200"></canvas>
+          <div class="info-grid" id="modal-info-grid" style="margin-top:12px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TOAST ===== -->
+<div class="toast" id="toast"></div>
+
+<script src="/src/frontend/static/app.js"></script>
+</body>
+</html>

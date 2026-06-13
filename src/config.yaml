@@ -1,0 +1,36 @@
+system:
+  output_dir: data/outputs
+  results_dir: results
+  uploads_dir: data/uploads
+  host: 0.0.0.0
+  port: 8000
+
+detection:
+  default_model: yolo11n.pt
+  confidence: 0.22
+  iou: 0.8
+
+tracking:
+  default_tracker: bytetrack.yaml
+
+roi:
+  default_mode: polygon
+
+ui:
+  lock_when_running: true
+
+classes:
+  coco_vehicle_ids:
+    - 2   # car
+    - 3   # motorcycle
+    - 5   # bus
+    - 7   # truck
+    - 1   # bicycle
+    - 0   # person
+  labels:
+    0: person
+    1: bicycle
+    2: car
+    3: motorcycle
+    5: bus
+    7: truck
