@@ -236,7 +236,6 @@ traffic_vehicle_system
 │   │                    # - Session folder creation
 │   │                    # - Timestamp helpers
 │   │                    # - History management
-│
 │   ├── frontend
 │   │   ├── static
 │   │   │   ├── app.js   # Frontend logic:
