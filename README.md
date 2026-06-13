@@ -250,7 +250,7 @@ traffic_vehicle_system
 │   │   │   │            # - ROI drawing interaction
 │   │   │   │            # - UI state management (start/stop/pause)
 │   │   │   │            # - Chart.js statistics rendering
-│   │   │
+│   │   │   │
 │   │   │   └── style.css # UI styling:
 │   │   │                 # - Dark dashboard theme
 │   │   │                 # - Layout (left video panel, right stats panel)
@@ -262,13 +262,13 @@ traffic_vehicle_system
 │   │                        # - ROI tools
 │   │                        # - Statistics dashboard
 │   │                        # - History panel
-│
+│   │
 │   ├── config.yaml      # System configuration:
 │   │                    # - YOLO model selection
 │   │                    # - Tracker settings
 │   │                    # - Confidence / IoU thresholds
 │   │                    # - ROI default mode
-│
+│   │
 │   └── history.json     # Stores session history metadata (for UI history panel)
 │
 ├── requirements.txt     # Python dependencies list
