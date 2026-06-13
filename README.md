@@ -231,12 +231,6 @@ traffic_vehicle_system
 │   │   │                # - ROI processing
 │   │   │                # - Real-time frame processing
 │   │   │
-│   │   ├── main.py      # FastAPI application layer:
-│   │   │                # - REST API endpoints (/upload, /start, /stop, /stats, /history)
-│   │   │                # - MJPEG video streaming (/video_feed)
-│   │   │                # - Session management (start/stop lifecycle)
-│   │   │                # - NO AI logic (delegates to engine.py)
-│   │   │
 │   │   └── utils.py     # Utility functions:
 │   │                    # - File handling (save/load JSON, CSV)
 │   │                    # - Session folder creation
@@ -262,6 +256,12 @@ traffic_vehicle_system
 │   │                        # - ROI tools
 │   │                        # - Statistics dashboard
 │   │                        # - History panel
+│   │
+│   ├── main.py      # FastAPI application layer:
+│   │                # - REST API endpoints (/upload, /start, /stop, /stats, /history)
+│   │                # - MJPEG video streaming (/video_feed)
+│   │                # - Session management (start/stop lifecycle)
+│   │                # - NO AI logic (delegates to engine.py)
 │   │
 │   ├── config.yaml      # System configuration:
 │   │                    # - YOLO model selection

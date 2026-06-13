@@ -3,7 +3,7 @@ main.py - FastAPI application, REST API, session management,
 video streaming, upload, statistics, history.
 """
 
-import os
+import os,sys
 os.environ["OPENCV_FFMPEG_LOGLEVEL"] = "-8"
 os.environ["OPENCV_FFMPEG_LOGLEVEL"] = "0"
 import shutil
@@ -27,15 +27,15 @@ from pydantic import BaseModel
 from starlette.requests import Request
 from ultralytics.utils import SETTINGS, LOGGER
 
-from src.backend.engine import VehicleCountingEngine
-from src.backend.utils import ensure_dirs, load_config, load_history, read_json
-
 #ROOT_PROJECT
-ROOT_PROJECT = Path(__file__).resolve().parent.parent.parent
+ROOT_PROJECT = Path(__file__).resolve().parent.parent
 print("ROOT_PROJECT",ROOT_PROJECT)
-os.chdir(ROOT_PROJECT)
+sys.path.append(str(ROOT_PROJECT))
 SETTINGS.update({ "weights_dir": str(ROOT_PROJECT / "models")})
 LOGGER.setLevel(logging.ERROR)
+
+from src.backend.engine import VehicleCountingEngine
+from src.backend.utils import ensure_dirs, load_config, load_history, read_json
 
 # ---------------------------------------------------------------------------
 # Bootstrap
