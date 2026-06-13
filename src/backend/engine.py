@@ -23,6 +23,8 @@ from src.backend.utils import (
     write_summary_json,
     write_vehicle_log_csv,
 )
+from ultralytics import YOLO
+from ultralytics.solutions import ObjectCounter
 
 # ---------------------------------------------------------------------------
 # COCO class-id → label
@@ -208,8 +210,6 @@ class VehicleCountingEngine:
     @staticmethod
     def _build_counter(session: ProcessingSession, frame_shape: tuple, config: dict):
         """Lazy import and build ObjectCounter to avoid startup cost."""
-        from ultralytics import YOLO
-        from ultralytics.solutions import ObjectCounter
 
         model_name = config.get("model", "yolo11n.pt")
         tracker = config.get("tracker", "bytetrack.yaml")

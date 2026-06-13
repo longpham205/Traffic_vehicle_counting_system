@@ -138,13 +138,12 @@ Frontend (JS) ──POST /start──► FastAPI (main.py)
                                     ▼
                               Engine (engine.py)
                                     │
-                          ┌─────────┴──────────┐
-                          ▼                    ▼
-                     YOLO11 model        ObjectCounter
-                     (detection +        (ROI crossing +
-                      tracking)           IN/OUT counting)
-                          │                    │
-                          └─────────┬──────────┘
+                                    ▼
+                               ObjectCounter
+                        ┌────────────────────────────┐   
+                        │ detection    ROI crossing  │
+                        │ tracking   IN/OUT counting │               
+                        └───────────┬────────────────┘
                                     ▼
                           Annotated frames → MJPEG stream
                           Statistics → GET /stats (polled every 800ms)
@@ -156,7 +155,7 @@ Frontend (JS) ──POST /start──► FastAPI (main.py)
 The user-drawn ROI is converted from canvas coordinates to actual video pixel coordinates before being sent to the backend. ObjectCounter uses this region to determine when a tracked object crosses the boundary, assigning a direction (IN or OUT) based on which side the object came from.
 
 ### Detection Flow
-Each frame is passed through the YOLO11 model using `model.track()`, which runs detection and associates detections to existing tracks using the selected tracker (ByteTrack or BoTSORT). Only the configured class IDs are detected.
+Each frame is passed through the YOLO11 model using `ObjectCounter()`, which runs detection and associates detections to existing tracks using the selected tracker (ByteTrack or BoTSORT). Only the configured class IDs are detected.
 
 ### Tracking Flow
 ByteTrack and BoTSORT maintain a unique `track_id` for each object across frames using motion prediction and re-identification. This ensures that each vehicle is counted only once even if it temporarily disappears from view.
@@ -172,16 +171,16 @@ Ultralytics `ObjectCounter` monitors the centroid trajectory of each tracked obj
 ┌─────────────────────────────────────────────────────────┐
 │                        BROWSER                          │
 │                                                         │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
-│  │  Dashboard   │  │  ROI Canvas  │  │  History     │  │
-│  │  (stats,     │  │  (draw line/ │  │  (modal,     │  │
-│  │   charts)    │  │   polygon)   │  │   export)    │  │
-│  └──────────────┘  └──────────────┘  └──────────────┘  │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐   │
+│  │  Dashboard   │  │  ROI Canvas  │  │  History     │   │
+│  │  (stats,     │  │  (draw line/ │  │  (modal,     │   │
+│  │   charts)    │  │   polygon)   │  │   export)    │   │
+│  └──────────────┘  └──────────────┘  └──────────────┘   │
 │          HTML + CSS + Vanilla JS + Chart.js             │
 └────────────────────────┬────────────────────────────────┘
                          │  REST API / MJPEG Stream
 ┌────────────────────────▼────────────────────────────────┐
-│                    FastAPI (main.py)                     │
+│                    FastAPI (main.py)                    │
 │                                                         │
 │  POST /upload   POST /start    GET /stats               │
 │  POST /stop     POST /pause    GET /history             │
@@ -190,17 +189,16 @@ Ultralytics `ObjectCounter` monitors the centroid trajectory of each tracked obj
 └────────────────────────┬────────────────────────────────┘
                          │
 ┌────────────────────────▼────────────────────────────────┐
-│                 Engine (engine.py)                       │
+│                 Engine (engine.py)                      │
 │                                                         │
 │   VehicleCountingEngine                                 │
-│   ├── YOLO11 (model.track)                              │
 │   ├── Ultralytics ObjectCounter                         │
 │   ├── ProcessingSession (thread-safe state)             │
-│   └── Background thread (video / camera loop)          │
+│   └── Background thread (video / camera loop)           │
 └────────────────────────┬────────────────────────────────┘
                          │
 ┌────────────────────────▼────────────────────────────────┐
-│                   Storage (File-based)                   │
+│                   Storage (File-based)                  │
 │                                                         │
 │   uploads/          ← input videos                      │
 │   outputs/          ← processed result videos           │
@@ -214,28 +212,70 @@ Ultralytics `ObjectCounter` monitors the centroid trajectory of each tracked obj
 ## 5. 📂 Project Structure
 
 ```
-traffic_vehicle_system/
+traffic_vehicle_system
+├── data
+│   ├── outputs          # Contains the processed video output (video output with bounding boxes and counting).
+│   └── uploads          # Save user-uploaded videos before processing.
 │
-├── main.py              ← FastAPI app, all REST endpoints, MJPEG stream
-├── engine.py            ← YOLO init, ObjectCounter, session lifecycle, threading
-├── utils.py             ← JSON/CSV helpers, history management, timestamps
-├── config.yaml          ← Default system configuration
-├── history.json         ← Auto-generated session index (do not edit manually)
+├── models               # Contains YOLO model weights (yolo11n/s/m.pt hoặc tự download lần đầu)
 │
-├── uploads/             ← Uploaded input videos (auto-created)
-├── outputs/             ← Processed result videos (auto-created)
-├── results/             ← Per-session report folders (auto-created)
-│   └── session_YYYYMMDD_HHMMSS/
-│       ├── summary.json
-│       ├── statistics.csv
-│       └── vehicle_log.csv
+├── results              # Save all results by session.
+│                        # Each session includes: summary.json, statistics.csv, vehicle_log.csv
 │
-├── templates/
-│   └── index.html       ← Full dashboard UI (single-page app)
+├── src
+│   ├── backend
+│   │   ├── engine.py    # Core AI engine:
+│   │   │                # - YOLO detection
+│   │   │                # - Object tracking (ByteTrack / BoT-SORT)
+│   │   │                # - Vehicle counting logic (IN / OUT)
+│   │   │                # - ROI processing
+│   │   │                # - Real-time frame processing
+│   │   │
+│   │   ├── main.py      # FastAPI application layer:
+│   │   │                # - REST API endpoints (/upload, /start, /stop, /stats, /history)
+│   │   │                # - MJPEG video streaming (/video_feed)
+│   │   │                # - Session management (start/stop lifecycle)
+│   │   │                # - NO AI logic (delegates to engine.py)
+│   │   │
+│   │   └── utils.py     # Utility functions:
+│   │                    # - File handling (save/load JSON, CSV)
+│   │                    # - Session folder creation
+│   │                    # - Timestamp helpers
+│   │                    # - History management
 │
-└── static/
-    ├── style.css         ← Dark dashboard theme
-    └── app.js            ← All frontend logic (ROI, upload, chart, history)
+│   ├── frontend
+│   │   ├── static
+│   │   │   ├── app.js   # Frontend logic:
+│   │   │   │            # - API calls (fetch /upload, /start, /stats)
+│   │   │   │            # - ROI drawing interaction
+│   │   │   │            # - UI state management (start/stop/pause)
+│   │   │   │            # - Chart.js statistics rendering
+│   │   │
+│   │   │   └── style.css # UI styling:
+│   │   │                 # - Dark dashboard theme
+│   │   │                 # - Layout (left video panel, right stats panel)
+│   │   │                 # - Responsive UI components
+│   │   │
+│   │   └── templates
+│   │       └── index.html # Main dashboard UI:
+│   │                        # - Video preview
+│   │                        # - ROI tools
+│   │                        # - Statistics dashboard
+│   │                        # - History panel
+│
+│   ├── config.yaml      # System configuration:
+│   │                    # - YOLO model selection
+│   │                    # - Tracker settings
+│   │                    # - Confidence / IoU thresholds
+│   │                    # - ROI default mode
+│
+│   └── history.json     # Stores session history metadata (for UI history panel)
+│
+├── requirements.txt     # Python dependencies list
+│
+├── run.bat              # Windows startup script (auto run server + environment setup optional)
+│
+└── run.sh               # Linux/Mac startup script (bash launcher for server)
 ```
 
 ---
