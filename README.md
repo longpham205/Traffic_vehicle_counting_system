@@ -37,7 +37,7 @@ run.bat
 # macOS / Linux
 bash run.sh
 ```
-
+## 🛠️ Option 2 — Manual setup (for development)
 ```bash
 # 1. Clone the repository
 git clone https://github.com/your-username/traffic_vehicle_system.git
