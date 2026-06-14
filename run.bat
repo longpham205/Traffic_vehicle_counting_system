@@ -114,7 +114,7 @@ start http://127.0.0.1:8000
 echo.
 echo =====================================================
 echo SYSTEM STARTED SUCCESSFULLY
-echo Backend : http://127.0.0.1:8000
+echo Front-End : http://127.0.0.1:8000
 echo =====================================================
 echo.
 

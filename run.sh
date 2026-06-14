@@ -78,7 +78,7 @@ echo
 # ==============================
 echo "[7/7] Starting backend server..."
 
-uvicorn src.backend.main:app --host 127.0.0.1 --port 8000 --reload &
+uvicorn src.main:app --host 127.0.0.1 --port 8000 --reload &
 BACKEND_PID=$!
 
 echo "Waiting Backend..."
@@ -86,25 +86,25 @@ echo "Waiting Backend..."
 # ==============================
 # WAIT SERVER READY
 # ==============================
-while ! nc -z 127.0.0.1 8000; do
-  sleep 1
+until python -c "import socket; exit(socket.socket().connect_ex(('127.0.0.1',8000)))"
+do
+    sleep 1
 done
-
 # ==============================
 # OPEN FRONTEND
 # ==============================
 echo "Opening browser..."
 
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    open http://127.0.0.1:8000
-else
-    xdg-open http://127.0.0.1:8000
+URL="http://127.0.0.1:8000"
+
+if command -v python >/dev/null 2>&1; then
+    python -c "import webbrowser; webbrowser.open('$URL')"
 fi
 
 echo
 echo "====================================================="
 echo "SYSTEM STARTED SUCCESSFULLY"
-echo "Backend : http://127.0.0.1:8000"
+echo "Front-end : http://127.0.0.1:8000"
 echo "====================================================="
 echo
 
