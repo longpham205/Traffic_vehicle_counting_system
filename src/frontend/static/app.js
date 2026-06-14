@@ -6,15 +6,21 @@
 'use strict';
 
 // =========================================================
+// CONSTANTS
+// =========================================================
+const MODE = { UPLOAD: 'upload', CAMERA: 'camera' };
+const ROI  = { LINE: 'line', POLYGON: 'polygon' };
+
+// =========================================================
 // STATE
 // =========================================================
 const state = {
-  mode: 'upload',           // 'upload' | 'camera'
+  mode: MODE.UPLOAD,
   uploadedFilename: null,
   uploadedFilePath: null,
   sessionRunning: false,
   sessionId: null,
-  roiMode: null,       // 'line' | 'polygon'
+  roiMode: ROI.POLYGON,
   roiDrawing: false,
   roiPoints: [],
   roiSaved: false,
@@ -22,80 +28,59 @@ const state = {
   streamActive: false,
   config: {},
   frameSize: { w: 640, h: 360 },
-  modalChart: null,
   firstFrameBase64: null,
 };
+
+// =========================================================
+// CONFIG
+// =========================================================
 async function loadConfig() {
   try {
     const res = await fetch('/config');
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const cfg = await res.json();
-    // Save config
+
     state.config = {
-      model: cfg.detection.default_model,
-      tracker: cfg.tracking.default_tracker,
+      model:      cfg.detection.default_model,
+      tracker:    cfg.tracking.default_tracker,
       confidence: cfg.detection.confidence,
-      iou: cfg.detection.iou,
-      classes: cfg.classes.coco_vehicle_ids,
-      labels: cfg.classes.labels,
-      roi_mode: cfg.roi.default_mode,
-      models: cfg.models || [],
-      trackers: cfg.trackers || [],
+      iou:        cfg.detection.iou,
+      classes:    cfg.classes.coco_vehicle_ids,
+      labels:     cfg.classes.labels,
+      roi_mode:   cfg.roi.default_mode,
+      models:     cfg.models   || [],
+      trackers:   cfg.trackers || [],
     };
     state.roiMode = cfg.roi.default_mode;
-    // Populate model select
-    const modelSelect = document.getElementById('cfg-model');
-    if (modelSelect) {
-      modelSelect.innerHTML = '';
-      state.config.models.forEach(model => {
-        const option = document.createElement('option');
-        option.value = model.value;
-        option.textContent = model.name;
-        if (model.value === state.config.model) {
-          option.selected = true;
-        }
-        modelSelect.appendChild(option);
-      });
-    }
-    // Populate tracker select
-    const trackerSelect = document.getElementById('cfg-tracker');
-    if (trackerSelect) {
-      trackerSelect.innerHTML = '';
-      state.config.trackers.forEach(tracker => {
-        const option = document.createElement('option');
-        option.value = tracker.value;
-        option.textContent = tracker.name;
-        if (tracker.value === state.config.tracker) {
-          option.selected = true;
-        }
-        trackerSelect.appendChild(option);
-      });
-    }
-    console.log('Config loaded:', state.config);
+
+    _populateSelect('cfg-model',   state.config.models,   state.config.model);
+    _populateSelect('cfg-tracker', state.config.trackers, state.config.tracker);
 
   } catch (err) {
     console.error('Failed to load config:', err);
   }
 }
-function applyConfigToUI() {
-  document.getElementById('cfg-model').value      = state.config.model;
-  document.getElementById('cfg-tracker').value    = state.config.tracker;
-  document.getElementById('cfg-confidence').value = state.config.confidence;
-  document.getElementById('conf-val').textContent = state.config.confidence;
-  document.getElementById('cfg-iou').value        = state.config.iou;
-  document.getElementById('iou-val').textContent  = state.config.iou.toFixed(2);
-  document.querySelectorAll('.cls-check').forEach(cb => { cb.checked = state.config.classes.includes(Number(cb.value));});
-  if (state.config.roi_mode === 'line') { document.getElementById('roi-line').checked = true;} 
-  else {document.getElementById('roi-polygon').checked = true;}
+
+function _populateSelect(id, items, selectedValue) {
+  const el = $(id);
+  if (!el) return;
+  el.innerHTML = items.map(item =>
+    `<option value="${item.value}"${item.value === selectedValue ? ' selected' : ''}>${item.name}</option>`
+  ).join('');
 }
-document.addEventListener('DOMContentLoaded', async () => {
-  await loadConfig();
-  console.log(state.config);
-  applyConfigToUI();
-  bindEvents();
-});
+
+function applyConfigToUI() {
+  $('cfg-model').value      = state.config.model;
+  $('cfg-tracker').value    = state.config.tracker;
+  $('cfg-confidence').value = state.config.confidence;
+  $('conf-val').textContent = state.config.confidence;
+  $('cfg-iou').value        = state.config.iou;
+  $('iou-val').textContent  = state.config.iou.toFixed(2);
+  document.querySelectorAll('.cls-check').forEach(cb => {
+    cb.checked = state.config.classes.includes(Number(cb.value));
+  });
+  $(state.config.roi_mode === ROI.LINE ? 'roi-line' : 'roi-polygon').checked = true;
+}
 
 // =========================================================
 // DOM REFERENCES
@@ -117,33 +102,33 @@ const roiStatus        = $('roi-status');
 const roiModeLabel     = $('roi-mode-label');
 const roiPointCount    = $('roi-point-count');
 
-//Video Progess
+// Video Progress
 const processingBar     = $('processing-bar');
 const processingPercent = $('processing-percent');
 const processingFrame   = $('processing-frame');
 const processingEta     = $('processing-eta');
 
 // Controls
-const modeUploadRadio  = $('mode-upload');
-const modeCameraRadio  = $('mode-camera');
-const uploadSection    = $('upload-section');
-const cameraSection    = $('camera-section');
-const uploadLabel      = $('upload-label');
-const fileInput        = $('file-input');
-const uploadText       = $('upload-text');
-const uploadProgress   = $('upload-progress');
-const progressBar      = $('progress-bar');
-const progressText     = $('progress-text');
-const cameraId         = $('camera-id');
+const modeUploadRadio = $('mode-upload');
+const modeCameraRadio = $('mode-camera');
+const uploadSection   = $('upload-section');
+const cameraSection   = $('camera-section');
+const uploadLabel     = $('upload-label');
+const fileInput       = $('file-input');
+const uploadText      = $('upload-text');
+const uploadProgress  = $('upload-progress');
+const progressBar     = $('progress-bar');
+const progressText    = $('progress-text');
+const cameraId        = $('camera-id');
 
-const btnDrawRoi  = $('btn-draw-roi');
-const btnClearRoi = $('btn-clear-roi');
-const btnSaveRoi  = $('btn-save-roi');
-const btnConfig   = $('btn-config');
-const btnStart    = $('btn-start');
-const btnPause    = $('btn-pause');
-const btnResume   = $('btn-resume');
-const btnStop     = $('btn-stop');
+const btnDrawRoi    = $('btn-draw-roi');
+const btnClearRoi   = $('btn-clear-roi');
+const btnSaveRoi    = $('btn-save-roi');
+const btnConfig     = $('btn-config');
+const btnStart      = $('btn-start');
+const btnPause      = $('btn-pause');
+const btnResume     = $('btn-resume');
+const btnStop       = $('btn-stop');
 const btnPreviewCam = $('btn-preview-camera');
 
 // Stats
@@ -153,27 +138,27 @@ const statTotal   = $('stat-total');
 const statCurrent = $('stat-current');
 const infoModel   = $('info-model');
 const infoTracker = $('info-tracker');
-const infoDuration= $('info-duration');
+const infoDuration = $('info-duration');
 const infoFps     = $('info-fps');
 const infoSession = $('info-session');
-const cpuBar  = $('cpu-bar');  const cpuPct  = $('cpu-pct');
-const ramBar  = $('ram-bar');  const ramPct  = $('ram-pct');
+const cpuBar = $('cpu-bar');  const cpuPct = $('cpu-pct');
+const ramBar = $('ram-bar');  const ramPct = $('ram-pct');
 
 // History
 const historyList    = $('history-list');
 const btnRefreshHist = $('btn-refresh-history');
 
 // Drawer
-const drawerOverlay = $('drawer-overlay');
-const configDrawer  = $('config-drawer');
-const btnCloseDrawer= $('btn-close-drawer');
-const btnApplyConfig= $('btn-apply-config');
-const cfgModel      = $('cfg-model');
-const cfgTracker    = $('cfg-tracker');
-const cfgConf       = $('cfg-confidence');
-const cfgIou        = $('cfg-iou');
-const confVal       = $('conf-val');
-const iouVal        = $('iou-val');
+const drawerOverlay  = $('drawer-overlay');
+const configDrawer   = $('config-drawer');
+const btnCloseDrawer = $('btn-close-drawer');
+const btnApplyConfig = $('btn-apply-config');
+const cfgModel       = $('cfg-model');
+const cfgTracker     = $('cfg-tracker');
+const cfgConf        = $('cfg-confidence');
+const cfgIou         = $('cfg-iou');
+const confVal        = $('conf-val');
+const iouVal         = $('iou-val');
 
 // Modal
 const modalOverlay  = $('modal-overlay');
@@ -186,10 +171,10 @@ const modalDlLog    = $('modal-dl-log');
 const modalInfoGrid = $('modal-info-grid');
 
 // Result section
-const resultSection   = $('result-section');
-const resultVideo     = $('result-video');
-const btnDownloadVideo= $('btn-download-video');
-const btnExportCsv    = $('btn-export-csv');
+const resultSection    = $('result-section');
+const resultVideo      = $('result-video');
+const btnDownloadVideo = $('btn-download-video');
+const btnExportCsv     = $('btn-export-csv');
 
 // Chart
 let vehicleChart = null;
@@ -206,10 +191,23 @@ function toast(msg, type = 'info', duration = 3000) {
 }
 
 // =========================================================
+// LABEL HELPERS  (read from config, fallback to raw value)
+// =========================================================
+function modelLabel(val) {
+  const found = state.config.models?.find(m => m.value === val);
+  return found ? found.name : (val || 'YOLO11n');
+}
+
+function trackerLabel(val) {
+  const found = state.config.trackers?.find(t => t.value === val);
+  return found ? found.name : (val || 'ByteTrack');
+}
+
+// =========================================================
 // CHART INIT
 // =========================================================
 function initChart() {
-  const ctx = document.getElementById('vehicle-chart').getContext('2d');
+  const ctx = $('vehicle-chart').getContext('2d');
   vehicleChart = new Chart(ctx, {
     type: 'bar',
     data: {
@@ -218,16 +216,10 @@ function initChart() {
         label: 'Count',
         data: [0, 0, 0, 0, 0, 0],
         backgroundColor: [
-          'rgba(37,99,235,0.7)',
-          'rgba(168,85,247,0.7)',
-          'rgba(34,197,94,0.7)',
-          'rgba(245,158,11,0.7)',
-          'rgba(6,182,212,0.7)',
-          'rgba(239,68,68,0.7)',
+          'rgba(37,99,235,0.7)', 'rgba(168,85,247,0.7)', 'rgba(34,197,94,0.7)',
+          'rgba(245,158,11,0.7)', 'rgba(6,182,212,0.7)', 'rgba(239,68,68,0.7)',
         ],
-        borderColor: [
-          '#2563eb', '#a855f7', '#22c55e', '#f59e0b', '#06b6d4', '#ef4444',
-        ],
+        borderColor: ['#2563eb', '#a855f7', '#22c55e', '#f59e0b', '#06b6d4', '#ef4444'],
         borderWidth: 1,
         borderRadius: 4,
       }]
@@ -235,20 +227,10 @@ function initChart() {
     options: {
       responsive: true,
       maintainAspectRatio: true,
-      plugins: {
-        legend: { display: false },
-        tooltip: { enabled: true },
-      },
+      plugins: { legend: { display: false }, tooltip: { enabled: true } },
       scales: {
-        x: {
-          ticks: { color: '#8b949e', font: { size: 11 } },
-          grid: { color: 'rgba(48,54,61,0.5)' },
-        },
-        y: {
-          ticks: { color: '#8b949e', font: { size: 11 } },
-          grid: { color: 'rgba(48,54,61,0.5)' },
-          beginAtZero: true,
-        }
+        x: { ticks: { color: '#8b949e', font: { size: 11 } }, grid: { color: 'rgba(48,54,61,0.5)' } },
+        y: { ticks: { color: '#8b949e', font: { size: 11 } }, grid: { color: 'rgba(48,54,61,0.5)' }, beginAtZero: true },
       }
     }
   });
@@ -257,12 +239,8 @@ function initChart() {
 function updateChart(counts) {
   if (!vehicleChart) return;
   vehicleChart.data.datasets[0].data = [
-    counts.car        || 0,
-    counts.motorcycle || 0,
-    counts.bus        || 0,
-    counts.truck      || 0,
-    counts.bicycle    || 0,
-    counts.person     || 0,
+    counts.car || 0, counts.motorcycle || 0, counts.bus || 0,
+    counts.truck || 0, counts.bicycle || 0, counts.person || 0,
   ];
   vehicleChart.update('none');
 }
@@ -292,19 +270,18 @@ function drawRoi() {
   ctx2d.beginPath();
   ctx2d.moveTo(pts[0][0], pts[0][1]);
   for (let i = 1; i < pts.length; i++) ctx2d.lineTo(pts[i][0], pts[i][1]);
-  if (state.roiMode === 'polygon' && pts.length > 2) ctx2d.closePath();
+  if (state.roiMode === ROI.POLYGON && pts.length > 2) ctx2d.closePath();
   ctx2d.stroke();
-  if (state.roiMode === 'polygon' && pts.length > 2) ctx2d.fill();
+  if (state.roiMode === ROI.POLYGON && pts.length > 2) ctx2d.fill();
   ctx2d.setLineDash([]);
 
-  // Draw dots
   pts.forEach(([x, y], i) => {
     ctx2d.beginPath();
     ctx2d.arc(x, y, 5, 0, Math.PI * 2);
-    ctx2d.fillStyle = i === 0 ? '#22c55e' : '#2563eb';
+    ctx2d.fillStyle   = i === 0 ? '#22c55e' : '#2563eb';
     ctx2d.fill();
     ctx2d.strokeStyle = '#fff';
-    ctx2d.lineWidth = 1.5;
+    ctx2d.lineWidth   = 1.5;
     ctx2d.stroke();
   });
 }
@@ -314,13 +291,13 @@ function canvasClick(e) {
   const rect = roiCanvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
-  const {displayW, displayH, offsetX, offsetY} = getVideoDisplayRect();
-  if ( x < offsetX || x > offsetX + displayW || y < offsetY || y > offsetY + displayH) return;
-  if (state.roiMode === 'line') {
-    state.roiPoints.push([x, y]);
-    if (state.roiPoints.length >= 2) finishRoi();
+  const { displayW, displayH, offsetX, offsetY } = getVideoDisplayRect();
+  if (x < offsetX || x > offsetX + displayW || y < offsetY || y > offsetY + displayH) return;
+
+  state.roiPoints.push([x, y]);
+  if (state.roiMode === ROI.LINE && state.roiPoints.length >= 2) {
+    finishRoi();
   } else {
-    state.roiPoints.push([x, y]);
     roiPointCount.textContent = `Points: ${state.roiPoints.length}`;
   }
   drawRoi();
@@ -328,7 +305,7 @@ function canvasClick(e) {
 
 function canvasDblClick() {
   if (!state.roiDrawing) return;
-  if (state.roiMode === 'polygon' && state.roiPoints.length >= 3) finishRoi();
+  if (state.roiMode === ROI.POLYGON && state.roiPoints.length >= 3) finishRoi();
 }
 
 function finishRoi() {
@@ -345,46 +322,32 @@ function clearRoi() {
   state.roiDrawing = false;
   state.roiSaved   = false;
   roiCanvas.classList.replace('drawing', 'idle');
-  roiStatus.style.display = 'none';
+  roiStatus.style.display   = 'none';
   roiPointCount.textContent = 'Points: 0';
   drawRoi();
 }
 
 function getVideoDisplayRect() {
-  const vw = state.frameSize.w;
-  const vh = state.frameSize.h;
-  const cw = roiCanvas.width;
-  const ch = roiCanvas.height;
-  const videoAspect = vw / vh;
+  const vw = state.frameSize.w, vh = state.frameSize.h;
+  const cw = roiCanvas.width,   ch = roiCanvas.height;
+  const videoAspect  = vw / vh;
   const canvasAspect = cw / ch;
-
-  let displayW;
-  let displayH;
-  let offsetX;
-  let offsetY;
-
+  let displayW, displayH, offsetX, offsetY;
   if (videoAspect > canvasAspect) {
-    displayW = cw;
-    displayH = cw / videoAspect;
-    offsetX = 0;
-    offsetY = (ch - displayH) / 2;
+    displayW = cw; displayH = cw / videoAspect; offsetX = 0; offsetY = (ch - displayH) / 2;
   } else {
-    displayH = ch;
-    displayW = ch * videoAspect;
-    offsetY = 0;
-    offsetX = (cw - displayW) / 2;
+    displayH = ch; displayW = ch * videoAspect; offsetY = 0; offsetX = (cw - displayW) / 2;
   }
   return { displayW, displayH, offsetX, offsetY };
 }
 
 function getRoiInVideoCoords() {
-  // Map canvas coords → actual video pixel coords
-  const {displayW, displayH, offsetX, offsetY} = getVideoDisplayRect();
-  const vw = state.frameSize.w;
-  const vh = state.frameSize.h; 
+  const { displayW, displayH, offsetX, offsetY } = getVideoDisplayRect();
+  const { w: vw, h: vh } = state.frameSize;
   return state.roiPoints.map(([x, y]) => [
     Math.round(((x - offsetX) / displayW) * vw),
-    Math.round(((y - offsetY) / displayH) * vh)]);
+    Math.round(((y - offsetY) / displayH) * vh),
+  ]);
 }
 
 // =========================================================
@@ -392,23 +355,17 @@ function getRoiInVideoCoords() {
 // =========================================================
 async function switchMode(mode) {
   state.mode = mode;
-  if (mode === 'upload') {
-    try {
-      await fetch('/stop_camera', {
-        method: 'POST'
-      });
-    } catch (_) {}
+  if (mode === MODE.UPLOAD) {
+    try { await fetch('/stop_camera', { method: 'POST' }); } catch (_) {}
     uploadSection.style.display = 'block';
     cameraSection.style.display = 'none';
     hideStream();
     clearRoi();
     return;
   }
-
   uploadSection.style.display = 'none';
   cameraSection.style.display = 'flex';
   clearRoi();
-
   startCameraStream();
 }
 
@@ -418,7 +375,6 @@ async function switchMode(mode) {
 async function uploadVideo(file) {
   const formData = new FormData();
   formData.append('file', file);
-
   uploadProgress.style.display = 'block';
   progressBar.style.width = '0%';
   progressText.textContent = '0%';
@@ -429,18 +385,13 @@ async function uploadVideo(file) {
     xhr.upload.onprogress = e => {
       if (e.lengthComputable) {
         const pct = Math.round((e.loaded / e.total) * 100);
-        progressBar.style.width = pct + '%';
+        progressBar.style.width  = pct + '%';
         progressText.textContent = pct + '%';
       }
     };
     xhr.onload = () => {
       uploadProgress.style.display = 'none';
-      if (xhr.status === 200) {
-        const data = JSON.parse(xhr.responseText);
-        resolve(data);
-      } else {
-        reject(new Error(xhr.responseText));
-      }
+      xhr.status === 200 ? resolve(JSON.parse(xhr.responseText)) : reject(new Error(xhr.responseText));
     };
     xhr.onerror = () => reject(new Error('Upload failed'));
     xhr.send(formData);
@@ -454,10 +405,7 @@ async function handleFileSelect(file) {
     const data = await uploadVideo(file);
     state.uploadedFilename = data.filename;
     state.uploadedFilePath = data.path;
-
-    if (data.first_frame) {
-      showFrameOnCanvas(data.first_frame);
-    }
+    if (data.first_frame) showFrameOnCanvas(data.first_frame);
     toast(`✅ Uploaded: ${data.filename}`, 'success');
   } catch (err) {
     toast(`Upload failed: ${err.message}`, 'error');
@@ -470,7 +418,7 @@ function showFrameOnCanvas(b64) {
   img.onload = () => {
     state.frameSize = { w: img.naturalWidth, h: img.naturalHeight };
     videoPlaceholder.style.display = 'none';
-    videoStream.style.display = 'block';
+    videoStream.style.display      = 'block';
     videoStream.src = 'data:image/jpeg;base64,' + b64;
     resizeCanvas();
   };
@@ -480,16 +428,15 @@ function showFrameOnCanvas(b64) {
 function restoreFirstFrame() {
   if (!state.firstFrameBase64) return;
   videoPlaceholder.style.display = 'none';
-  videoStream.style.display = 'block';
+  videoStream.style.display      = 'block';
   videoStream.src = 'data:image/jpeg;base64,' + state.firstFrameBase64;
-  roiCanvas.style.pointerEvents = 'auto';
+  roiCanvas.style.pointerEvents  = 'auto';
 }
 
 // =========================================================
 // CAMERA PREVIEW
 // =========================================================
 async function previewCamera() {
-  console.log("📷 previewCamera called");
   const id = parseInt(cameraId.value) || 0;
   try {
     const res = await fetch(`/first_frame?source=camera&camera_id=${id}`);
@@ -504,8 +451,8 @@ async function previewCamera() {
 }
 
 function startCameraStream() {
-  videoStream.src = '/camera_feed';
-  videoStream.style.display = 'block';
+  videoStream.src                = '/camera_feed';
+  videoStream.style.display      = 'block';
   videoPlaceholder.style.display = 'none';
 }
 
@@ -513,65 +460,52 @@ function startCameraStream() {
 // STREAM
 // =========================================================
 function startStream() {
-  videoStream.src = '/video_feed';
-  videoStream.style.display = 'block';
+  videoStream.src                = '/video_feed';
+  videoStream.style.display      = 'block';
   videoPlaceholder.style.display = 'none';
-  state.streamActive = true;
-  // Disable ROI canvas mouse events during stream
-  roiCanvas.style.pointerEvents = 'none';
+  state.streamActive             = true;
+  roiCanvas.style.pointerEvents  = 'none';
 }
 
 function hideStream() {
-  videoStream.src = '';
-  videoStream.style.display = 'none';
+  videoStream.src                = '';
+  videoStream.style.display      = 'none';
   videoPlaceholder.style.display = 'flex';
-  state.streamActive = false;
-  roiCanvas.style.pointerEvents = 'auto';
+  state.streamActive             = false;
+  roiCanvas.style.pointerEvents  = 'auto';
 }
 
 // =========================================================
 // SESSION CONTROL
 // =========================================================
 async function startSession() {
-  if (!state.roiSaved) {
-    toast('Please save your ROI first (or skip if default is OK)', 'warning');
-    // Allow proceeding without ROI — use empty array (engine uses default)
-  }
-
   const classes = Array.from(document.querySelectorAll('.cls-check:checked'))
     .map(cb => parseInt(cb.value));
 
   const payload = {
-    mode: state.mode,
-    model: state.config.model,
-    tracker: state.config.tracker,
-    confidence: state.config.confidence,
-    iou: state.config.iou,
+    mode:           state.mode,
+    model:          state.config.model,
+    tracker:        state.config.tracker,
+    confidence:     state.config.confidence,
+    iou:            state.config.iou,
     classes,
-    roi_mode: state.config.roi_mode,
-    region_points: state.roiSaved ? getRoiInVideoCoords() : [],
+    roi_mode:       state.config.roi_mode,
+    region_points:  state.roiSaved ? getRoiInVideoCoords() : [],
   };
 
-  if (state.mode === 'upload') {
-    if (!state.uploadedFilename) {
-      toast('Please upload a video first', 'error');
-      return;
-    }
+  if (state.mode === MODE.UPLOAD) {
+    if (!state.uploadedFilename) { toast('Please upload a video first', 'error'); return; }
     payload.video = state.uploadedFilename;
   } else {
     payload.camera_id = parseInt(cameraId.value) || 0;
   }
 
   try {
-    if (state.mode === 'camera') {
-      await fetch('/stop_camera', {
-        method: 'POST'
-      });
-      await new Promise(resolve =>
-        setTimeout(resolve, 300)
-      );
+    if (state.mode === MODE.CAMERA) {
+      await fetch('/stop_camera', { method: 'POST' });
+      await new Promise(r => setTimeout(r, 300));
     }
-    const res = await fetch('/start', {
+    const res  = await fetch('/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -579,7 +513,7 @@ async function startSession() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Start failed');
 
-    state.sessionId = data.session_id;
+    state.sessionId      = data.session_id;
     state.sessionRunning = true;
     lockUI(true);
     startStream();
@@ -596,28 +530,25 @@ async function stopSession() {
   state.sessionRunning = false;
   stopStatsPolling();
   restoreFirstFrame();
-
   lockUI(false);
   setStatus('stopped');
   toast('⏹ Session stopped', 'warning');
-
-  // Show result video after a short delay for file to flush
   setTimeout(() => showResultSection(), 1500);
 }
 
 async function pauseSession() {
   await fetch('/pause', { method: 'POST' });
   setStatus('paused');
-  btnPause.disabled   = true;
-  btnResume.disabled  = false;
+  btnPause.disabled  = true;
+  btnResume.disabled = false;
   toast('⏸ Paused', 'warning');
 }
 
 async function resumeSession() {
   await fetch('/resume', { method: 'POST' });
   setStatus('running');
-  btnPause.disabled   = false;
-  btnResume.disabled  = true;
+  btnPause.disabled  = false;
+  btnResume.disabled = true;
   toast('▶ Resumed', 'success');
 }
 
@@ -639,7 +570,6 @@ async function fetchStats() {
     const data = await res.json();
     applyStats(data);
 
-    // Auto-stop UI if backend finished (video mode)
     if (data.status === 'done' && state.sessionRunning) {
       state.sessionRunning = false;
       stopStatsPolling();
@@ -647,45 +577,42 @@ async function fetchStats() {
       lockUI(false);
       setStatus('done');
       clearRoi();
+      processingBar.style.width     = '100%';
+      processingPercent.textContent = '100%';
+      processingEta.textContent     = 'Completed';
       toast('✅ Processing complete!', 'success');
       setTimeout(() => showResultSection(), 1500);
-
-      processingBar.style.width = '100%';
-      processingPercent.textContent = '100%';
-      processingEta.textContent = 'Completed';  
     }
   } catch (_) {}
 }
 
 function applyStats(data) {
-  statIn.textContent      = data.in_count      ?? 0;
-  statOut.textContent     = data.out_count     ?? 0;
-  statTotal.textContent   = data.total_count   ?? 0;
-  statCurrent.textContent = data.current_vehicles ?? 0;
+  statIn.textContent      = data.in_count          ?? 0;
+  statOut.textContent     = data.out_count         ?? 0;
+  statTotal.textContent   = data.total_count       ?? 0;
+  statCurrent.textContent = data.current_vehicles  ?? 0;
 
-  infoModel.textContent   = data.model   || '—';
-  infoTracker.textContent = data.tracker || '—';
-  infoDuration.textContent= data.elapsed_hms || '—';
-  infoFps.textContent     = data.fps ? `${data.fps} fps` : '—';
-  infoSession.textContent = data.session_id || '—';
+  infoModel.textContent    = data.model       || '—';
+  infoTracker.textContent  = data.tracker     || '—';
+  infoDuration.textContent = data.elapsed_hms || '—';
+  infoFps.textContent      = data.fps ? `${data.fps} fps` : '—';
+  infoSession.textContent  = data.session_id  || '—';
 
-  hdrFps.textContent = data.fps ? `${data.fps}` : '—';
+  hdrFps.textContent     = data.fps   || '—';
   hdrModel.textContent   = modelLabel(data.model);
   hdrTracker.textContent = trackerLabel(data.tracker);
 
   const cpu = data.cpu_usage || 0;
   const ram = data.ram_usage || 0;
-  cpuBar.style.width = cpu + '%';
-  ramBar.style.width = ram + '%';
-  cpuPct.textContent = cpu + '%';
-  ramPct.textContent = ram + '%';
+  cpuBar.style.width = cpu + '%';  cpuPct.textContent = cpu + '%';
+  ramBar.style.width = ram + '%';  ramPct.textContent = ram + '%';
 
   if (data.vehicle_counts) updateChart(data.vehicle_counts);
 
   const progress = data.progress || 0;
   processingBar.style.width     = `${progress}%`;
   processingPercent.textContent = `${progress}%`;
-  processingFrame.textContent   = `${data.processed_frames || 0} / ${ data.total_frames || 0 } frames`;
+  processingFrame.textContent   = `${data.processed_frames || 0} / ${data.total_frames || 0} frames`;
   processingEta.textContent     = `ETA: ${data.eta || 0}s`;
 }
 
@@ -695,14 +622,13 @@ function applyStats(data) {
 async function showResultSection() {
   if (!state.sessionId) return;
   try {
-    const res  = await fetch(`/session/${state.sessionId}`);
+    const res = await fetch(`/session/${state.sessionId}`);
     if (!res.ok) return;
-    const data = await res.json();
     const videoUrl = `/result_video/${state.sessionId}`;
-    resultVideo.src = videoUrl;
-    btnDownloadVideo.href = videoUrl;
+    resultVideo.src           = videoUrl;
+    btnDownloadVideo.href     = videoUrl;
     btnDownloadVideo.download = `result_${state.sessionId}.mp4`;
-    btnExportCsv.href = `/export/statistics/${state.sessionId}`;
+    btnExportCsv.href         = `/export/statistics/${state.sessionId}`;
     resultSection.style.display = 'block';
   } catch (_) {}
 }
@@ -711,17 +637,14 @@ async function showResultSection() {
 // UI LOCK
 // =========================================================
 function lockUI(locked) {
-  const lockTargets = [
+  [
     uploadLabel, uploadSection,
     btnDrawRoi, btnClearRoi, btnSaveRoi,
     cfgModel, cfgTracker, cfgConf, cfgIou,
     ...document.querySelectorAll('.cls-check'),
     ...document.querySelectorAll('input[name="roi-mode"]'),
     modeUploadRadio, modeCameraRadio,
-  ];
-  lockTargets.forEach(el => {
-    if (el) el.disabled = locked;
-  });
+  ].forEach(el => { if (el) el.disabled = locked; });
 
   btnStart.disabled  = locked;
   btnPause.disabled  = !locked;
@@ -731,59 +654,32 @@ function lockUI(locked) {
 }
 
 // =========================================================
-// STATUS HELPERS
+// STATUS
 // =========================================================
 function setStatus(status) {
   const labels = { idle: 'IDLE', running: 'RUNNING', paused: 'PAUSED', stopped: 'STOPPED', done: 'DONE' };
   hdrStatus.textContent = labels[status] || status.toUpperCase();
   hdrStatus.className   = `badge-value status-text ${status}`;
-  if (status === 'running') hdrStatus.classList.add('pulse');
-  else hdrStatus.classList.remove('pulse');
-}
-
-function modelLabel(m) {
-  const map = {
-    'yolo11n.pt': 'YOLO11n',
-    'yolo11s.pt': 'YOLO11s',
-    'yolo11m.pt': 'YOLO11m',
-  };
-  return map[m] || m || 'YOLO11n';
-}
-
-function trackerLabel(t) {
-  const map = {
-    'bytetrack.yaml': 'ByteTrack',
-    'botsort.yaml':   'BoTSORT',
-  };
-  return map[t] || t || 'ByteTrack';
+  hdrStatus.classList.toggle('pulse', status === 'running');
 }
 
 // =========================================================
 // CONFIG DRAWER
 // =========================================================
-function openDrawer() {
-  configDrawer.classList.add('open');
-  drawerOverlay.classList.add('open');
-}
-
-function closeDrawer() {
-  configDrawer.classList.remove('open');
-  drawerOverlay.classList.remove('open');
-}
+function openDrawer()  { configDrawer.classList.add('open');    drawerOverlay.classList.add('open'); }
+function closeDrawer() { configDrawer.classList.remove('open'); drawerOverlay.classList.remove('open'); }
 
 function applyConfig() {
   state.config.model      = cfgModel.value;
   state.config.tracker    = cfgTracker.value;
   state.config.confidence = parseFloat(cfgConf.value);
   state.config.iou        = parseFloat(cfgIou.value);
-  state.config.roi_mode   = document.querySelector('input[name="roi-mode"]:checked')?.value || 'polygon';
+  state.config.roi_mode   = document.querySelector('input[name="roi-mode"]:checked')?.value || ROI.POLYGON;
   state.config.classes    = Array.from(document.querySelectorAll('.cls-check:checked'))
     .map(cb => parseInt(cb.value));
 
-  // Update header badges
   hdrModel.textContent   = modelLabel(state.config.model);
   hdrTracker.textContent = trackerLabel(state.config.tracker);
-
   closeDrawer();
   toast('✅ Configuration applied', 'success');
 }
@@ -802,11 +698,11 @@ async function loadHistory() {
 }
 
 function renderHistory(entries) {
-  if (!entries || entries.length === 0) {
+  if (!entries?.length) {
     historyList.innerHTML = '<div class="empty-state">No sessions yet</div>';
     return;
   }
-  historyList.innerHTML = entries.map((e, i) => `
+  historyList.innerHTML = entries.map(e => `
     <div class="history-item" data-session="${e.session_id}" onclick="openSessionModal('${e.session_id}')">
       <div class="history-thumb">🎬</div>
       <div class="history-info">
@@ -833,31 +729,31 @@ let modalChartInst = null;
 
 async function openSessionModal(sessionId) {
   try {
-    const res  = await fetch(`/session/${sessionId}`);
+    const res = await fetch(`/session/${sessionId}`);
     if (!res.ok) { toast('Session data not found', 'error'); return; }
     const data = await res.json();
 
+    // Header
     modalTitle.textContent = data.video_name || sessionId;
-    modalVideo.src = `/result_video/${sessionId}`;
-    modalDlVideo.href  = `/result_video/${sessionId}`;
-    modalDlVideo.download = `result_${sessionId}.mp4`;
-    modalDlStats.href  = `/export/statistics/${sessionId}`;
-    modalDlLog.href    = `/export/vehicle_log/${sessionId}`;
-    modalDlStats.setAttribute('download', 'statistics.csv');
-    modalDlLog.setAttribute('download', 'vehicle_log.csv');
+    modalVideo.src         = `/result_video/${sessionId}`;
+    modalDlVideo.href      = `/result_video/${sessionId}`;
+    modalDlVideo.download  = `result_${sessionId}.mp4`;
+    modalDlStats.href      = `/export/statistics/${sessionId}`;
+    modalDlStats.download  = 'statistics.csv';
+    modalDlLog.href        = `/export/vehicle_log/${sessionId}`;
+    modalDlLog.download    = 'vehicle_log.csv';
 
     // Info grid
     const fields = [
-      ['Model',    modelLabel(data.model)],
-      ['Tracker',  trackerLabel(data.tracker)],
+      ['Model',      modelLabel(data.model)],
+      ['Tracker',    trackerLabel(data.tracker)],
       ['Confidence', data.confidence],
-      ['IoU',      data.iou],
-      ['IN',       data.in_count],
-      ['OUT',      data.out_count],
-      // ['Total',    data.total_count],
-      ['Duration', data.processing_duration_hms || `${data.processing_duration}s`],
-      ['Avg FPS',  data.fps_avg || '—'],
-      ['Date',     formatDate(data.date)],
+      ['IoU',        data.iou],
+      ['IN',         data.in_count],
+      ['OUT',        data.out_count],
+      ['Duration',   data.processing_duration_hms || `${data.processing_duration}s`],
+      ['Avg FPS',    data.fps_avg || '—'],
+      ['Date',       formatDate(data.date)],
     ];
     modalInfoGrid.innerHTML = fields.map(([k, v]) => `
       <div class="info-row">
@@ -866,167 +762,10 @@ async function openSessionModal(sessionId) {
       </div>
     `).join('');
 
-    // Chart
-    const mc = document.getElementById('modal-chart').getContext('2d');
-    if (modalChartInst) modalChartInst.destroy();
+    // Vehicle cards + chart
     const counts = data.vehicle_counts || {};
-    const vehicleCards = document.getElementById('vehicle-cards');
-    const vehicles = [
-      { icon: '🚗', name: 'Car', value: counts.car || 0 },
-      { icon: '🏍️', name: 'Motorcycle', value: counts.motorcycle || 0 },
-      { icon: '🧍', name: 'Person', value: counts.person || 0 },
-      { icon: '🚌', name: 'Bus', value: counts.bus || 0 },
-      { icon: '🚚', name: 'Truck', value: counts.truck || 0 },
-      { icon: '🚲', name: 'Bicycle', value: counts.bicycle || 0 }
-    ];
-    vehicleCards.innerHTML = vehicles.map(v => `
-      <div class="vehicle-card">
-        <div class="vehicle-card-icon">${v.icon}</div>
-        <div class="vehicle-card-name">${v.name}</div>
-        <div class="vehicle-card-value">${v.value}</div>
-      </div>
-    `).join('');
-
-    const rawLabels = [
-      'Car',
-      'Motorcycle',
-      'Bus',
-      'Truck',
-      'Bicycle',
-      'Person'
-    ];
-    const rawData = [
-      counts.car || 0,
-      counts.motorcycle || 0,
-      counts.bus || 0,
-      counts.truck || 0,
-      counts.bicycle || 0,
-      counts.person || 0
-    ];
-    const rawColors = [
-      '#2563eb',
-      '#a855f7',
-      '#22c55e',
-      '#f59e0b',
-      '#06b6d4',
-      '#ef4444'
-    ];
-    const filtered = rawLabels.map((label, i) => ({
-      label,
-      value: rawData[i],
-      color: rawColors[i]
-    })).filter(item => item.value > 0);
-
-    let donutCenterMode = 'total';
-    const centerTextPlugin = {
-      id: 'centerText',
-      beforeDraw(chart) {
-        const { ctx }   = chart;
-        const values    = chart.data.datasets[0].data;
-        const labels    = chart.data.labels;
-        const total     = values.reduce((a, b) => a + b, 0);
-        const centerX   = (chart.chartArea.left + chart.chartArea.right) / 2;
-        const centerY   = (chart.chartArea.top + chart.chartArea.bottom) / 2;
-        ctx.save();
-        ctx.fillStyle = '#fff';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        if (donutCenterMode === 'total') {
-          ctx.font = 'bold 28px Inter';
-          ctx.fillText(total, centerX, centerY - 10);
-          ctx.fillStyle = '#8b949e';
-          ctx.font = '12px Inter';
-          ctx.fillText('Vehicles', centerX, centerY + 15);
-        }
-        else {
-          const maxValue = Math.max(...values);
-          const maxIndex = values.indexOf(maxValue);
-          const percent = total > 0 ? ((maxValue / total) * 100).toFixed(1) : 0;
-          ctx.font = 'bold 28px Inter';
-          ctx.fillStyle = '#fff';
-          ctx.fillText(`${percent}%`, centerX, centerY - 10);
-          ctx.fillStyle = '#8b949e';
-          ctx.font = '12px Inter';
-          ctx.fillText(labels[maxIndex], centerX, centerY + 15);
-        }
-        ctx.restore();
-      }
-    };
-
-    Chart.defaults.plugins.legend.labels.color = '#ffffff';
-
-    modalChartInst = new Chart(mc, {
-      type: 'doughnut',
-      plugins: [centerTextPlugin],
-      data: {
-        labels: filtered.map(x => x.label),
-        datasets: [{
-          data: filtered.map(x => x.value),
-          backgroundColor: filtered.map(x => x.color)
-        }]
-      },
-      options: {
-        cutout: '50%',
-        responsive: true,
-        plugins: {
-          legend: {
-            position: 'bottom',
-            labels: { color: '#8b949e', font: { size: 11 },padding: 10,
-              generateLabels(chart) {
-                const data = chart.data.datasets[0].data;
-                const total = data.reduce((a, b) => a + b, 0);
-                return chart.data.labels.map((label, i) => {
-                  const value = data[i] || 0;
-                  const percent = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
-                  return {
-                    text: `${label}: (${percent}%)`,
-                    fillStyle: chart.data.datasets[0].backgroundColor[i],
-                    strokeStyle: chart.data.datasets[0].backgroundColor[i],
-                    fontColor: '#ffffff',
-                    hidden: false,
-                    index: i
-                  };
-                });
-              }
-            }
-          },
-          tooltip: {
-            callbacks: {
-              label(context) {
-                const value = context.raw || 0;
-                const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                const percent = total > 0 ? ((value / total) * 100).toFixed(1): 0;
-                return `${context.label}: ${value} (${percent}%)`;
-              }
-            }
-          }
-        }
-      }
-    });
-
-    const canvas = document.getElementById('modal-chart');
-    canvas.onclick = (e) => {
-      if (!modalChartInst) return;
-      const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      const chart = modalChartInst;
-      const centerX =
-        (chart.chartArea.left + chart.chartArea.right) / 2;
-      const centerY =
-        (chart.chartArea.top + chart.chartArea.bottom) / 2;
-      const dx = x - centerX;
-      const dy = y - centerY;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-
-      const innerRadius =
-        chart.getDatasetMeta(0).data[0].innerRadius;
-
-      if (distance < innerRadius) {
-        donutCenterMode = donutCenterMode === 'total' ? 'most' : 'total';
-        chart.update();
-      }
-    };
+    _renderVehicleCards(counts);
+    _buildModalChart(counts);
 
     modalOverlay.style.display = 'flex';
   } catch (err) {
@@ -1034,40 +773,164 @@ async function openSessionModal(sessionId) {
   }
 }
 
+function _renderVehicleCards(counts) {
+  const items = [
+    { icon: '🚗', name: 'Car',        key: 'car' },
+    { icon: '🏍️', name: 'Motorcycle', key: 'motorcycle' },
+    { icon: '🧍', name: 'Person',     key: 'person' },
+    { icon: '🚌', name: 'Bus',        key: 'bus' },
+    { icon: '🚚', name: 'Truck',      key: 'truck' },
+    { icon: '🚲', name: 'Bicycle',    key: 'bicycle' },
+  ];
+  $('vehicle-cards').innerHTML = items.map(v => `
+    <div class="vehicle-card">
+      <div class="vehicle-card-icon">${v.icon}</div>
+      <div class="vehicle-card-name">${v.name}</div>
+      <div class="vehicle-card-value">${counts[v.key] || 0}</div>
+    </div>
+  `).join('');
+}
+
+function _buildModalChart(counts) {
+  const ALL = [
+    { label: 'Car',        key: 'car',        color: '#2563eb' },
+    { label: 'Motorcycle', key: 'motorcycle', color: '#a855f7' },
+    { label: 'Bus',        key: 'bus',        color: '#22c55e' },
+    { label: 'Truck',      key: 'truck',      color: '#f59e0b' },
+    { label: 'Bicycle',    key: 'bicycle',    color: '#06b6d4' },
+    { label: 'Person',     key: 'person',     color: '#ef4444' },
+  ];
+  const filtered = ALL.map(x => ({ ...x, value: counts[x.key] || 0 })).filter(x => x.value > 0);
+
+  if (modalChartInst) modalChartInst.destroy();
+
+  let donutCenterMode = 'total';
+
+  const centerTextPlugin = {
+    id: 'centerText',
+    beforeDraw(chart) {
+      const { ctx } = chart;
+      const values  = chart.data.datasets[0].data;
+      const labels  = chart.data.labels;
+      const total   = values.reduce((a, b) => a + b, 0);
+      const cx = (chart.chartArea.left + chart.chartArea.right)  / 2;
+      const cy = (chart.chartArea.top  + chart.chartArea.bottom) / 2;
+      ctx.save();
+      ctx.textAlign    = 'center';
+      ctx.textBaseline = 'middle';
+      if (donutCenterMode === 'total') {
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 28px Inter';
+        ctx.fillText(total, cx, cy - 10);
+        ctx.fillStyle = '#8b949e';
+        ctx.font = '12px Inter';
+        ctx.fillText('Vehicles', cx, cy + 15);
+      } else {
+        const maxVal = Math.max(...values);
+        const maxIdx = values.indexOf(maxVal);
+        const pct    = total > 0 ? ((maxVal / total) * 100).toFixed(1) : 0;
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 28px Inter';
+        ctx.fillText(`${pct}%`, cx, cy - 10);
+        ctx.fillStyle = '#8b949e';
+        ctx.font = '12px Inter';
+        ctx.fillText(labels[maxIdx], cx, cy + 15);
+      }
+      ctx.restore();
+    }
+  };
+
+  Chart.defaults.plugins.legend.labels.color = '#ffffff';
+
+  const canvas = $('modal-chart');
+  modalChartInst = new Chart(canvas.getContext('2d'), {
+    type: 'doughnut',
+    plugins: [centerTextPlugin],
+    data: {
+      labels:   filtered.map(x => x.label),
+      datasets: [{ data: filtered.map(x => x.value), backgroundColor: filtered.map(x => x.color) }],
+    },
+    options: {
+      cutout: '50%',
+      responsive: true,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            color: '#8b949e', font: { size: 11 }, padding: 10,
+            generateLabels(chart) {
+              const data  = chart.data.datasets[0].data;
+              const total = data.reduce((a, b) => a + b, 0);
+              return chart.data.labels.map((label, i) => {
+                const pct = total > 0 ? ((data[i] / total) * 100).toFixed(1) : 0;
+                return {
+                  text: `${label}: (${pct}%)`,
+                  fillStyle:   chart.data.datasets[0].backgroundColor[i],
+                  strokeStyle: chart.data.datasets[0].backgroundColor[i],
+                  fontColor: '#ffffff', hidden: false, index: i,
+                };
+              });
+            }
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label(context) {
+              const total = context.dataset.data.reduce((a, b) => a + b, 0);
+              const pct   = total > 0 ? ((context.raw / total) * 100).toFixed(1) : 0;
+              return `${context.label}: ${context.raw} (${pct}%)`;
+            }
+          }
+        }
+      }
+    }
+  });
+
+  // Toggle center display on click inside donut hole
+  canvas.onclick = e => {
+    if (!modalChartInst) return;
+    const rect   = canvas.getBoundingClientRect();
+    const chart  = modalChartInst;
+    const cx = (chart.chartArea.left + chart.chartArea.right)  / 2;
+    const cy = (chart.chartArea.top  + chart.chartArea.bottom) / 2;
+    const dx = e.clientX - rect.left - cx;
+    const dy = e.clientY - rect.top  - cy;
+    if (Math.sqrt(dx * dx + dy * dy) < chart.getDatasetMeta(0).data[0]?.innerRadius) {
+      donutCenterMode = donutCenterMode === 'total' ? 'most' : 'total';
+      chart.update();
+    }
+  };
+}
+
 // =========================================================
 // EVENT LISTENERS
 // =========================================================
 function bindEvents() {
+  modeUploadRadio.addEventListener('change', () => switchMode(MODE.UPLOAD));
+  modeCameraRadio.addEventListener('change', () => switchMode(MODE.CAMERA));
 
-  // Mode selector
-  modeUploadRadio.addEventListener('change', () => switchMode('upload'));
-  modeCameraRadio.addEventListener('change', () => switchMode('camera'));
-
-  // File upload
   fileInput.addEventListener('change', e => handleFileSelect(e.target.files[0]));
-  uploadLabel.addEventListener('dragover', e => { e.preventDefault(); uploadLabel.style.borderColor = '#2563eb'; });
-  uploadLabel.addEventListener('dragleave', () => { uploadLabel.style.borderColor = ''; });
+  uploadLabel.addEventListener('dragover',  e => { e.preventDefault(); uploadLabel.style.borderColor = '#2563eb'; });
+  uploadLabel.addEventListener('dragleave', ()  => { uploadLabel.style.borderColor = ''; });
   uploadLabel.addEventListener('drop', e => {
     e.preventDefault();
     uploadLabel.style.borderColor = '';
     handleFileSelect(e.dataTransfer.files[0]);
   });
 
-  // Camera preview
   btnPreviewCam.addEventListener('click', previewCamera);
 
-  // ROI buttons
   btnDrawRoi.addEventListener('click', () => {
     state.roiDrawing = true;
     state.roiPoints  = [];
     state.roiSaved   = false;
     roiCanvas.classList.add('drawing');
-    roiModeLabel.textContent  = `Drawing: ${state.config.roi_mode === 'line' ? 'Line' : 'Polygon'}`;
+    roiModeLabel.textContent  = `Drawing: ${state.config.roi_mode === ROI.LINE ? 'Line' : 'Polygon'}`;
     roiPointCount.textContent = 'Points: 0';
     roiStatus.style.display   = 'flex';
     drawRoi();
     toast(
-      state.config.roi_mode === 'line'
+      state.config.roi_mode === ROI.LINE
         ? 'Click 2 points to draw a line'
         : 'Click to add points. Double-click to finish.',
       'info', 4000
@@ -1075,7 +938,6 @@ function bindEvents() {
   });
 
   btnClearRoi.addEventListener('click', () => { clearRoi(); toast('ROI cleared', 'info'); });
-
   btnSaveRoi.addEventListener('click', () => {
     if (state.roiPoints.length < 2) { toast('Draw ROI first', 'warning'); return; }
     state.roiSaved   = true;
@@ -1083,57 +945,46 @@ function bindEvents() {
     toast('✅ ROI saved', 'success');
   });
 
-  roiCanvas.addEventListener('click', canvasClick);
+  roiCanvas.addEventListener('click',    canvasClick);
   roiCanvas.addEventListener('dblclick', canvasDblClick);
 
-  // Session controls
   btnStart.addEventListener('click',  startSession);
   btnPause.addEventListener('click',  pauseSession);
   btnResume.addEventListener('click', resumeSession);
   btnStop.addEventListener('click',   stopSession);
 
-  // Config
-  btnConfig.addEventListener('click',  openDrawer);
+  btnConfig.addEventListener('click',      openDrawer);
   btnCloseDrawer.addEventListener('click', closeDrawer);
-  drawerOverlay.addEventListener('click', closeDrawer);
+  drawerOverlay.addEventListener('click',  closeDrawer);
   btnApplyConfig.addEventListener('click', applyConfig);
 
   cfgConf.addEventListener('input', () => { confVal.textContent = parseFloat(cfgConf.value).toFixed(2); });
-  cfgIou.addEventListener('input',  () => { iouVal.textContent  = parseFloat(cfgIou.value).toFixed(2);  });
+  cfgIou.addEventListener('input',  () => { iouVal.textContent  = parseFloat(cfgIou.value).toFixed(2); });
 
-  // History
   btnRefreshHist.addEventListener('click', loadHistory);
 
-  // Modal close
-  btnCloseModal.addEventListener('click', () => {
-    modalOverlay.style.display = 'none';
-    modalVideo.src = '';
-  });
-  modalOverlay.addEventListener('click', e => {
-    if (e.target === modalOverlay) {
-      modalOverlay.style.display = 'none';
-      modalVideo.src = '';
-    }
-  });
+  btnCloseModal.addEventListener('click', closeModal);
+  modalOverlay.addEventListener('click', e => { if (e.target === modalOverlay) closeModal(); });
 
-  // Resize → redraw ROI canvas
   window.addEventListener('resize', resizeCanvas);
+}
+
+function closeModal() {
+  modalOverlay.style.display = 'none';
+  modalVideo.src = '';
 }
 
 // =========================================================
 // INIT
 // =========================================================
-function init() {
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadConfig();
+  applyConfigToUI();
   initChart();
   bindEvents();
   loadHistory();
   resizeCanvas();
   setStatus('idle');
-
-  // Initial header values
   hdrModel.textContent   = modelLabel(state.config.model);
   hdrTracker.textContent = trackerLabel(state.config.tracker);
-}
-
-document.addEventListener('DOMContentLoaded', init);
-
+});
