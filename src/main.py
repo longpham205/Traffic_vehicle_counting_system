@@ -60,15 +60,7 @@ engine = VehicleCountingEngine(output_dir=OUT_DIR, results_dir=RES_DIR)
 #Load api config
 @app.get("/config")
 async def get_config():
-    return {
-        "model": cfg["detection"]["default_model"],
-        "confidence": cfg["detection"]["confidence"],
-        "iou": cfg["detection"]["iou"],
-        "tracker": cfg["tracking"]["default_tracker"],
-        "roi_mode": cfg["roi"]["default_mode"],
-        "classes": cfg["classes"]["coco_vehicle_ids"],
-        "labels": cfg["classes"]["labels"]
-    }
+    return cfg
 
 # ---------------------------------------------------------------------------
 # Request models
@@ -339,4 +331,12 @@ async def export_vehicle_log(session_id: str):
 if __name__ == "__main__":
     host = cfg["system"].get("host", "0.0.0.0")
     port = cfg["system"].get("port", 8000)
+    if host == "0.0.0.0":
+        browser_url = f"http://127.0.0.1:{port}/"
+    else:
+        browser_url = f"http://{host}:{port}/"
+    print("=" * 60)
+    print("Traffic Vehicle Counting System")
+    print(f"Open Front-End at: {browser_url}")
+    print("=" * 60)
     uvicorn.run("main:app", host=host, port=port, reload=False)

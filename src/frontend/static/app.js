@@ -32,16 +32,49 @@ async function loadConfig() {
       throw new Error(`HTTP ${res.status}`);
     }
     const cfg = await res.json();
+    // Save config
     state.config = {
-      model: cfg.model,
-      tracker: cfg.tracker,
-      confidence: cfg.confidence,
-      iou: cfg.iou,
-      classes: cfg.classes,
-      roi_mode: cfg.roi_mode,
+      model: cfg.detection.default_model,
+      tracker: cfg.tracking.default_tracker,
+      confidence: cfg.detection.confidence,
+      iou: cfg.detection.iou,
+      classes: cfg.classes.coco_vehicle_ids,
+      labels: cfg.classes.labels,
+      roi_mode: cfg.roi.default_mode,
+      models: cfg.models || [],
+      trackers: cfg.trackers || [],
     };
-    state.roiMode = cfg.roi_mode;
+    state.roiMode = cfg.roi.default_mode;
+    // Populate model select
+    const modelSelect = document.getElementById('cfg-model');
+    if (modelSelect) {
+      modelSelect.innerHTML = '';
+      state.config.models.forEach(model => {
+        const option = document.createElement('option');
+        option.value = model.value;
+        option.textContent = model.name;
+        if (model.value === state.config.model) {
+          option.selected = true;
+        }
+        modelSelect.appendChild(option);
+      });
+    }
+    // Populate tracker select
+    const trackerSelect = document.getElementById('cfg-tracker');
+    if (trackerSelect) {
+      trackerSelect.innerHTML = '';
+      state.config.trackers.forEach(tracker => {
+        const option = document.createElement('option');
+        option.value = tracker.value;
+        option.textContent = tracker.name;
+        if (tracker.value === state.config.tracker) {
+          option.selected = true;
+        }
+        trackerSelect.appendChild(option);
+      });
+    }
     console.log('Config loaded:', state.config);
+
   } catch (err) {
     console.error('Failed to load config:', err);
   }
@@ -1104,6 +1137,3 @@ function init() {
 
 document.addEventListener('DOMContentLoaded', init);
 
-window.onload = () => {
-  something.init()
-}

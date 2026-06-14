@@ -1,3 +1,4 @@
+#src/config.yaml
 system:
   output_dir: data/outputs
   results_dir: results
@@ -34,3 +35,20 @@ classes:
     3: motorcycle
     5: bus
     7: truck
+
+models:
+  - value: yolo11n.pt
+    name: YOLO11n (Nano - Fastest)
+
+  - value: yolo11s.pt
+    name: YOLO11s (Small)
+
+  - value: yolo11m.pt
+    name: YOLO11m (Medium - Accurate)
+
+trackers:
+  - value: bytetrack.yaml
+    name: ByteTrack
+
+  - value: botsort.yaml
+    name: BoTSORT
