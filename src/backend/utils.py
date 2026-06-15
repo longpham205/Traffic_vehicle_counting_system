@@ -19,7 +19,7 @@ import yaml
 # ---------------------------------------------------------------------------
 
 def load_config(path: str = "config.yaml") -> dict:
-    with open(path, "r") as f:
+    with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -130,13 +130,12 @@ def write_statistics_csv(folder: str, vehicle_counts: dict) -> str:
 
 
 def write_vehicle_log_csv(folder: str, vehicle_log: list) -> str:
-    """
-    vehicle_log: list of dicts with keys:
-        track_id, type, direction, time
-    """
     path = os.path.join(folder, "vehicle_log.csv")
-    with open(path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["track_id", "type", "direction", "time"])
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=["id", "type", "direction", "time"]
+        )
         writer.writeheader()
         for row in vehicle_log:
             writer.writerow(row)

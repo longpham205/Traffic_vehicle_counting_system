@@ -19,6 +19,21 @@ roi:
 
 ui:
   lock_when_running: true
+  default_selected_classes:
+    - 1  # bicycle
+    - 2  # car
+    - 3  # motorcycle
+  stats_poll_interval_ms: 800
+  toast_duration_ms: 3000
+  camera_restart_delay_ms: 300
+  camera_stop_delay_ms: 800
+  result_show_delay_ms: 1500
+  status_labels:
+    idle: IDLE
+    running: RUNNING
+    paused: PAUSED
+    stopped: STOPPED
+    done: DONE
 
 classes:
   coco_vehicle_ids:
@@ -35,8 +50,14 @@ classes:
     3: motorcycle
     5: bus
     7: truck
+  display:
+    0: { label: Person,     icon: "🚶",  color: "#ef4444", border: "#ef4444" }
+    1: { label: Bicycle,    icon: "🚲",  color: "#06b6d4", border: "#06b6d4" }
+    2: { label: Car,        icon: "🚗",  color: "#2563eb", border: "#2563eb" }
+    3: { label: Motorcycle, icon: "🏍",  color: "#a855f7", border: "#a855f7" }
+    5: { label: Bus,        icon: "🚌",  color: "#22c55e", border: "#22c55e" }
+    7: { label: Truck,      icon: "🚛",  color: "#f59e0b", border: "#f59e0b" }
 
-models:
 models:
   - value: yolo11n.pt
     name: YOLO11n (Fastest)

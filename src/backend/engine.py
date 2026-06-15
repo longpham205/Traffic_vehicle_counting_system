@@ -61,6 +61,9 @@ class ProcessingSession:
         self.out_count:        int = 0
         self.total_count:      int = 0
         self.current_vehicles: int = 0
+        self.log_id = 0
+        self.prev_in_counts = {}
+        self.prev_out_counts = {}
 
         classes = session_config.get("classes", default_class_ids)
         self.vehicle_counts: dict = {
@@ -284,6 +287,7 @@ class VehicleCountingEngine:
     ) -> None:
         try:
             solution  = counter.process(frame)
+
             annotated = getattr(solution, "plot_im", None)
             if annotated is None:
                 annotated = frame
@@ -296,6 +300,7 @@ class VehicleCountingEngine:
                 session.current_vehicles = getattr(solution, "total_tracks", 0)
                 cls_counts = getattr(solution, "classwise_count", {})
                 if cls_counts:
+                    self._update_vehicle_log(session,cls_counts,)
                     for label, cnt_data in cls_counts.items():
                         label = str(label).lower()
                         session.vehicle_counts[label] = (
@@ -412,6 +417,37 @@ class VehicleCountingEngine:
         session.end_time = time.time()
         session.status   = "done"
         self._finalize_session(session, config)
+        
+        
+    def _update_vehicle_log(self, session: ProcessingSession, classwise_count: dict, ) -> None:
+        for label, cnt_data in classwise_count.items():
+            label = str(label).lower()
+            current_in = cnt_data.get("IN", 0)
+            current_out = cnt_data.get("OUT", 0)
+            previous_in = session.prev_in_counts.get(label, 0)
+            previous_out = session.prev_out_counts.get(label, 0)
+
+            if current_in > previous_in:
+                for _ in range(current_in - previous_in):
+                    session.log_id += 1
+                    session.vehicle_log.append({
+                        "id": session.log_id,
+                        "type": label,
+                        "direction": "IN",
+                        "time": now_iso(),
+                    })
+
+            if current_out > previous_out:
+                for _ in range(current_out - previous_out):
+                    session.log_id += 1
+                    session.vehicle_log.append({
+                        "id": session.log_id,
+                        "type": label,
+                        "direction": "OUT",
+                        "time": now_iso(),
+                    })
+            session.prev_in_counts[label] = current_in
+            session.prev_out_counts[label] = current_out
     
     # ------------------------------------------------------------------
     # Private – convert_to_h26
@@ -452,6 +488,9 @@ class VehicleCountingEngine:
         if session.output_path and os.path.exists(session.output_path):
             session.output_path = self._convert_to_h264(session.output_path)
             
+        print("ROI MODE:", session.roi_mode)
+        print("ROI POINTS:", session.region_points)
+        
         _det = self.app_config.get("detection", {})
         summary = {
             "session_id":              session.session_id,

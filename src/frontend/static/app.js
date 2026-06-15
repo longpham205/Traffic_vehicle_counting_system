@@ -29,8 +29,8 @@ const state = {
   config:           {},
   frameSize:        { w: 640, h: 360 },
   firstFrameBase64: null,
-  cameraFlip:       false,     
-  ghostRoiPoints:   null,       
+  cameraFlip:       false,
+  ghostRoiPoints:   null,
   ghostRoiMode:     null,
 };
 
@@ -48,11 +48,22 @@ async function loadConfig() {
       tracker:    cfg.tracking.default_tracker,
       confidence: cfg.detection.confidence,
       iou:        cfg.detection.iou,
-      classes:    cfg.classes.coco_vehicle_ids,
+      classes:    cfg.ui.default_selected_classes || cfg.classes.coco_vehicle_ids,
       labels:     cfg.classes.labels,
+      display:    cfg.classes.display || {},
       roi_mode:   cfg.roi.default_mode,
       models:     cfg.models   || [],
       trackers:   cfg.trackers || [],
+
+      // UI timing / text — fallbacks kept in case config.yaml hasn't been updated yet
+      statsPollIntervalMs:  cfg.ui.stats_poll_interval_ms   ?? 800,
+      toastDurationMs:      cfg.ui.toast_duration_ms        ?? 3000,
+      cameraRestartDelayMs: cfg.ui.camera_restart_delay_ms  ?? 300,
+      cameraStopDelayMs:    cfg.ui.camera_stop_delay_ms     ?? 800,
+      resultShowDelayMs:    cfg.ui.result_show_delay_ms     ?? 1500,
+      statusLabels:         cfg.ui.status_labels            ?? {
+        idle: 'IDLE', running: 'RUNNING', paused: 'PAUSED', stopped: 'STOPPED', done: 'DONE'
+      },
     };
     state.roiMode = cfg.roi.default_mode;
 
@@ -132,7 +143,7 @@ const btnPause      = $('btn-pause');
 const btnResume     = $('btn-resume');
 const btnStop       = $('btn-stop');
 const btnPreviewCam = $('btn-preview-camera');
-const btnFlipCam    = $('btn-flip-cam');      
+const btnFlipCam    = $('btn-flip-cam');
 
 // Stats
 const statIn       = $('stat-in');
@@ -184,41 +195,73 @@ let vehicleChart = null;
 // =========================================================
 // TOAST
 // =========================================================
-function toast(msg, type = 'info', duration = 3000) {
+function toast(msg, type = 'info', duration = null) {
   const el = $('toast');
   el.textContent = msg;
   el.className   = `toast show ${type}`;
   clearTimeout(el._timer);
-  el._timer = setTimeout(() => { el.className = 'toast'; }, duration);
+  el._timer = setTimeout(() => { el.className = 'toast'; }, duration ?? state.config.toastDurationMs);
 }
 
 // =========================================================
 // LABEL HELPERS
 // =========================================================
 function modelLabel(val) {
-  return state.config.models?.find(m => m.value === val)?.name ?? (val || 'YOLO11n');
+  return state.config.models?.find(m => m.value === val)?.name ?? (val || state.config.model);
 }
 function trackerLabel(val) {
-  return state.config.trackers?.find(t => t.value === val)?.name ?? (val || 'ByteTrack');
+  return state.config.trackers?.find(t => t.value === val)?.name ?? (val || state.config.tracker);
+}
+
+// =========================================================
+// CLASS DISPLAY HELPERS (driven by config.yaml -> classes.display)
+// =========================================================
+
+/** Classes currently selected (state.config.classes), enriched with display info, for the live chart. */
+function getSelectedChartClasses() {
+  return state.config.classes.map(id => {
+    const key = state.config.labels[id];
+    const d   = state.config.display[id] || {};
+    return {
+      id,
+      key,
+      label:  d.label  || titleCase(key || ''),
+      color:  d.color  || 'rgba(120,120,120,0.7)',
+      border: d.border || '#888888',
+      icon:   d.icon   || '📦',
+    };
+  });
+}
+
+/** All classes known to the system, enriched with display info, for checkboxes / modal cards / modal chart. */
+function getAllDisplayClasses() {
+  return Object.entries(state.config.labels).map(([id, key]) => {
+    const d = state.config.display[id] || {};
+    return {
+      id: Number(id),
+      key,
+      label: d.label || titleCase(key),
+      icon:  d.icon  || '📦',
+      color: d.color || '#888888',
+    };
+  });
 }
 
 // =========================================================
 // CHART INIT
 // =========================================================
 function initChart() {
+  const selected = getSelectedChartClasses();
   const ctx = $('vehicle-chart').getContext('2d');
   vehicleChart = new Chart(ctx, {
     type: 'bar',
     data: {
-      labels: ['Car', 'Motorcycle', 'Bus', 'Truck', 'Bicycle', 'Person'],
+      labels: selected.map(x => x.label),
       datasets: [{
         label: 'Count',
-        data: [0, 0, 0, 0, 0, 0],
-        backgroundColor: [
-          'rgba(37,99,235,0.7)', 'rgba(168,85,247,0.7)', 'rgba(34,197,94,0.7)',
-          'rgba(245,158,11,0.7)', 'rgba(6,182,212,0.7)', 'rgba(239,68,68,0.7)',
-        ],
-        borderColor: ['#2563eb', '#a855f7', '#22c55e', '#f59e0b', '#06b6d4', '#ef4444'],
+        data: selected.map(() => 0),
+        backgroundColor: selected.map(x => x.color),
+        borderColor: selected.map(x => x.border),
         borderWidth: 1,
         borderRadius: 4,
       }]
@@ -226,21 +269,18 @@ function initChart() {
     options: {
       responsive: true,
       maintainAspectRatio: true,
-      plugins: { legend: { display: false }, tooltip: { enabled: true } },
-      scales: {
-        x: { ticks: { color: '#8b949e', font: { size: 11 } }, grid: { color: 'rgba(48,54,61,0.5)' } },
-        y: { ticks: { color: '#8b949e', font: { size: 11 } }, grid: { color: 'rgba(48,54,61,0.5)' }, beginAtZero: true },
-      }
+      plugins: {legend: { display: false },tooltip: { enabled: true }}
     }
   });
 }
 
 function updateChart(counts) {
   if (!vehicleChart) return;
-  vehicleChart.data.datasets[0].data = [
-    counts.car || 0, counts.motorcycle || 0, counts.bus || 0,
-    counts.truck || 0, counts.bicycle || 0, counts.person || 0,
-  ];
+  const selected = getSelectedChartClasses();
+  vehicleChart.data.labels                      = selected.map(x => x.label);
+  vehicleChart.data.datasets[0].data            = selected.map(x => counts[x.key] || 0);
+  vehicleChart.data.datasets[0].backgroundColor = selected.map(x => x.color);
+  vehicleChart.data.datasets[0].borderColor     = selected.map(x => x.border);
   vehicleChart.update('none');
 }
 
@@ -262,7 +302,7 @@ function drawRoi() {
   if (ghost?.length >= 2) {
     ctx2d.save();
     ctx2d.globalAlpha = 0.3;
-    ctx2d.strokeStyle = '#f59e0b';
+    ctx2d.strokeStyle = '#f5550b';
     ctx2d.fillStyle   = 'rgba(245,158,11,0.08)';
     ctx2d.lineWidth   = 2;
     ctx2d.setLineDash([6, 4]);
@@ -275,8 +315,9 @@ function drawRoi() {
     ghost.forEach(([x, y]) => {
       ctx2d.beginPath();
       ctx2d.arc(x, y, 3, 0, Math.PI * 2);
-      ctx2d.fillStyle = '#f59e0b';
+      ctx2d.fillStyle = '#f53e0b';
       ctx2d.fill();
+    
     });
     ctx2d.setLineDash([]);
     ctx2d.restore();
@@ -549,7 +590,7 @@ async function startSession() {
   try {
     if (state.mode === MODE.CAMERA) {
       await fetch('/stop_camera', { method: 'POST' });
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, state.config.cameraRestartDelayMs));
     }
     const res  = await fetch('/start', {
       method:  'POST',
@@ -587,10 +628,10 @@ async function stopSession() {
   toast('⏹ Session stopped', 'warning');
 
   if (state.mode === MODE.CAMERA) {
-    await new Promise(r => setTimeout(r, 800));
+    await new Promise(r => setTimeout(r, state.config.cameraStopDelayMs));
   }
   restoreFirstFrame();
-  setTimeout(() => showResultSection(), 1500);
+  setTimeout(() => showResultSection(), state.config.resultShowDelayMs);
 }
 
 async function pauseSession() {
@@ -613,23 +654,30 @@ async function resumeSession() {
 // GHOST ROI HELPER
 // =========================================================
 async function _loadGhostRoi(sessionId) {
-  if (!sessionId) return;
-  try {
-    const res  = await fetch(`/session/${sessionId}`);
-    if (!res.ok) return;
-    const data = await res.json();
-    if (data.region_points?.length) {
-      state.ghostRoiPoints = videoToCanvasCoords(data.region_points);
-      state.ghostRoiMode   = data.roi_mode || ROI.POLYGON;
+  for (let i = 0; i < 10; i++) {
+    try {
+      const res = await fetch(`/session/${sessionId}`);
+      if (!res.ok) {
+        await new Promise(r => setTimeout(r, 300));
+        continue;
+      }
+      const data = await res.json();
+      if (data.region_points?.length) {
+        state.ghostRoiPoints = videoToCanvasCoords(data.region_points);
+        state.ghostRoiMode = data.roi_mode || ROI.POLYGON;
+        drawRoi();
+      }
+      return;
+    } catch (_) {
+      await new Promise(r => setTimeout(r, 300));
     }
-  } catch (_) {}
+  }
 }
-
 // =========================================================
 // STATS POLLING
 // =========================================================
 function startStatsPolling() {
-  state.statsInterval = setInterval(fetchStats, 800);
+  state.statsInterval = setInterval(fetchStats, state.config.statsPollIntervalMs);
 }
 
 function stopStatsPolling() {
@@ -657,13 +705,13 @@ async function fetchStats() {
       setTimeout(() => {
         const progressSection = $('processing-section');
         if (progressSection) progressSection.style.display = 'none';
-      }, 1500);
+      }, state.config.resultShowDelayMs);
 
       if (state.mode === MODE.CAMERA) {
-        await new Promise(r => setTimeout(r, 800));
+        await new Promise(r => setTimeout(r, state.config.cameraStopDelayMs));
       }
       restoreFirstFrame();
-      setTimeout(() => showResultSection(), 1500);
+      setTimeout(() => showResultSection(), state.config.resultShowDelayMs);
     }
   } catch (_) {}
 }
@@ -735,11 +783,39 @@ function lockUI(locked) {
   btnConfig.disabled = locked;
 }
 
+function titleCase(text) {
+  return text
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function renderClassCheckboxes() {
+  const container = $('class-checkboxes');
+  if (!container) return;
+
+  container.innerHTML = getAllDisplayClasses()
+    .map(c => {
+      const checked = state.config.classes.includes(c.id) ? 'checked' : '';
+      return `
+        <label class="checkbox-item">
+          <input
+            type="checkbox"
+            value="${c.id}"
+            class="cls-check"
+            ${checked}
+          />
+          <span>${c.icon} ${c.label}</span>
+        </label>
+      `;
+    })
+    .join('');
+}
+
 // =========================================================
 // STATUS
 // =========================================================
 function setStatus(status) {
-  const labels = { idle: 'IDLE', running: 'RUNNING', paused: 'PAUSED', stopped: 'STOPPED', done: 'DONE' };
+  const labels = state.config.statusLabels;
   hdrStatus.textContent = labels[status] || status.toUpperCase();
   hdrStatus.className   = `badge-value status-text ${status}`;
   hdrStatus.classList.toggle('pulse', status === 'running');
@@ -762,6 +838,8 @@ function applyConfig() {
 
   hdrModel.textContent   = modelLabel(state.config.model);
   hdrTracker.textContent = trackerLabel(state.config.tracker);
+  vehicleChart.destroy();
+  initChart();
   closeDrawer();
   toast('✅ Configuration applied', 'success');
 }
@@ -853,32 +931,18 @@ async function openSessionModal(sessionId) {
 }
 
 function _renderVehicleCards(counts) {
-  const items = [
-    { icon: '🚗', name: 'Car',        key: 'car' },
-    { icon: '🏍️', name: 'Motorcycle', key: 'motorcycle' },
-    { icon: '🧍', name: 'Person',     key: 'person' },
-    { icon: '🚌', name: 'Bus',        key: 'bus' },
-    { icon: '🚚', name: 'Truck',      key: 'truck' },
-    { icon: '🚲', name: 'Bicycle',    key: 'bicycle' },
-  ];
+  const items = getAllDisplayClasses();
   $('vehicle-cards').innerHTML = items.map(v => `
     <div class="vehicle-card">
       <div class="vehicle-card-icon">${v.icon}</div>
-      <div class="vehicle-card-name">${v.name}</div>
+      <div class="vehicle-card-name">${v.label}</div>
       <div class="vehicle-card-value">${counts[v.key] || 0}</div>
     </div>
   `).join('');
 }
 
 function _buildModalChart(counts) {
-  const ALL = [
-    { label: 'Car',        key: 'car',        color: '#2563eb' },
-    { label: 'Motorcycle', key: 'motorcycle', color: '#a855f7' },
-    { label: 'Bus',        key: 'bus',        color: '#22c55e' },
-    { label: 'Truck',      key: 'truck',      color: '#f59e0b' },
-    { label: 'Bicycle',    key: 'bicycle',    color: '#06b6d4' },
-    { label: 'Person',     key: 'person',     color: '#ef4444' },
-  ];
+  const ALL = getAllDisplayClasses();
   const filtered = ALL.map(x => ({ ...x, value: counts[x.key] || 0 })).filter(x => x.value > 0);
 
   if (modalChartInst) modalChartInst.destroy();
@@ -1002,7 +1066,7 @@ function bindEvents() {
 
   btnPreviewCam.addEventListener('click', previewCamera);
   if (btnFlipCam) {
-    btnFlipCam.style.display = 'none';   
+    btnFlipCam.style.display = 'none';
     btnFlipCam.addEventListener('click', () => {
       state.cameraFlip = !state.cameraFlip;
       btnFlipCam.classList.toggle('active', state.cameraFlip);
@@ -1074,6 +1138,7 @@ function bindEvents() {
 // =========================================================
 document.addEventListener('DOMContentLoaded', async () => {
   await loadConfig();
+  renderClassCheckboxes();
   applyConfigToUI();
   initChart();
   bindEvents();
