@@ -60,7 +60,7 @@ html, body {
   margin: 0 auto;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start; 
   padding: 0 24px;
   height: 64px;
   background: var(--bg-panel);
@@ -69,12 +69,31 @@ html, body {
   top: 0;
   z-index: 100;
   backdrop-filter: blur(10px);
+  gap: 12px;
 }
 
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.header-left { 
+  flex: 1;
+  display: flex; 
+  align-items: center; 
+}
+
+.header-brand { 
+  display: flex; 
+  align-items: center; 
+  gap: 12px; 
+}
+
+#btn-config { 
+  order: 3; 
+  flex-shrink: 0; 
+}
+
+.header-badges { 
+  order: 2; 
+  display: flex; 
+  gap: 10px; 
+  align-items: center; 
 }
 
 .logo-icon {
@@ -94,12 +113,6 @@ html, body {
   font-size: 11px;
   color: var(--text-secondary);
   margin-top: 1px;
-}
-
-.header-badges {
-  display: flex;
-  gap: 10px;
-  align-items: center;
 }
 
 .badge {
@@ -133,6 +146,92 @@ html, body {
 .status-text.paused  { color: var(--yellow); }
 .status-text.stopped { color: var(--red); }
 .status-text.done    { color: var(--cyan); }
+
+/* =========================================================
+   MOBILE HEADER
+   ========================================================= */
+
+@media (max-width: 768px) {
+
+  .header {
+    height: auto;
+    padding: 10px 16px;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    flex: 1;       
+    min-width: 0;
+  }
+
+  .header-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;        
+    flex: 1;
+    min-width: 0;
+  }
+
+  .logo-icon {
+    font-size: 24px;
+    flex-shrink: 0;
+  }
+
+  .header-title {
+    min-width: 0;
+  }
+
+  .title-main {
+    display: block;
+    font-size: 14px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .title-sub {
+    display: block;
+    font-size: 10px;
+    margin-top: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #btn-config {
+    flex-shrink: 0;   
+    order: 3;
+  }
+
+  .header-badges {
+    order: 4;
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+
+  .badge {
+    min-width: 0;
+    padding: 5px 4px;
+    text-align: center;
+  }
+
+  .badge-label {
+    font-size: 8px;
+    letter-spacing: 0.5px;
+  }
+
+  .badge-value {
+    font-size: 11px;
+  }
+}
 
 /* =========================================================
    DASHBOARD LAYOUT
@@ -535,8 +634,6 @@ html, body {
    RESOURCE BARS
    ========================================================= */
 .resource-bars { display: flex; flex-direction: column; gap: 12px; }
-
-.resource-item {}
 
 .resource-label {
   display: flex;
