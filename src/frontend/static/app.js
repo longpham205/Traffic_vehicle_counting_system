@@ -1020,8 +1020,6 @@ function bindEvents() {
     state.roiDrawing     = true;
     state.roiPoints      = [];
     state.roiSaved       = false;
-    state.ghostRoiPoints = null;  
-    state.ghostRoiMode   = null;
     roiCanvas.classList.add('drawing');
     roiModeLabel.textContent  = `Drawing: ${state.config.roi_mode === ROI.LINE ? 'Line' : 'Polygon'}`;
     roiPointCount.textContent = 'Points: 0';
@@ -1036,8 +1034,6 @@ function bindEvents() {
   });
 
   btnClearRoi.addEventListener('click', () => {
-    state.ghostRoiPoints = null;
-    state.ghostRoiMode   = null;
     clearRoi();
     toast('ROI cleared', 'info');
   });

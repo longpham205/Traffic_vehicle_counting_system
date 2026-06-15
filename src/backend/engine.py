@@ -213,13 +213,16 @@ class VehicleCountingEngine:
 
         session.model_name    = model_name
         session.tracker_name  = tracker
-        session.region_points = region_points   # ← save for ghost ROI
+        session.region_points = region_points   
         session.roi_mode      = roi_mode
 
+        models_dir = Path(__file__).resolve().parents[2] / "models"
+        model_path = models_dir / model_name
+        
         return ObjectCounter(
             show=False,
             region=region_points,
-            model=model_name,
+            model=str(model_path),
             classes=classes,
             tracker=tracker,
             verbose=False,

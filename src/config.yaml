@@ -37,14 +37,21 @@ classes:
     7: truck
 
 models:
+models:
   - value: yolo11n.pt
-    name: YOLO11n (Nano - Fastest)
+    name: YOLO11n (Fastest)
 
   - value: yolo11s.pt
-    name: YOLO11s (Small)
+    name: YOLO11s (Balanced)
 
   - value: yolo11m.pt
-    name: YOLO11m (Medium - Accurate)
+    name: YOLO11m (Recommended)
+
+  - value: yolo11l.pt
+    name: YOLO11l (High Accuracy)
+
+  - value: yolo11x.pt
+    name: YOLO11x (Best Accuracy)
 
 trackers:
   - value: bytetrack.yaml
