@@ -3,10 +3,13 @@
 main.py - FastAPI application, REST API, session management,
 video streaming, upload, statistics, history.
 """
+import os
+os.environ["OPENCV_FFMPEG_LOGLEVEL"] = "0"
+os.environ["OPENCV_LOG_LEVEL"] = "ERROR"
+os.environ["OPENCV_LOG_LEVEL"] = "SILENT"
 
 import base64
 import logging
-import os
 import shutil
 import sys
 import time
@@ -15,7 +18,7 @@ from typing import Optional
 
 import cv2
 import uvicorn
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
@@ -27,8 +30,6 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from starlette.requests import Request
 from ultralytics.utils import LOGGER, SETTINGS
-
-os.environ["OPENCV_FFMPEG_LOGLEVEL"] = "0"
 
 # ---------------------------------------------------------------------------
 # Project root
@@ -45,8 +46,6 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 log = logging.getLogger("main")
-logging.getLogger("asyncio").setLevel(logging.CRITICAL)
-logging.getLogger("asyncio").disabled = True
 
 from src.backend.engine import VehicleCountingEngine
 from src.backend.utils import ensure_dirs, load_config, load_history, read_json
@@ -86,16 +85,17 @@ app.state.preview_cap: Optional[cv2.VideoCapture] = None
 # ---------------------------------------------------------------------------
 
 class StartRequest(BaseModel):
-    mode:            str   = "upload"
-    video:           Optional[str] = None
-    camera_id:       int   = 0
-    model:           str   = _det.get("default_model",   "yolo11n.pt")
-    tracker:         str   = _trk.get("default_tracker", "bytetrack.yaml")
-    confidence:      float = _det.get("confidence", 0.25)
-    iou:             float = _det.get("iou",         0.70)
-    classes:         list  = _cls.get("coco_vehicle_ids", [2, 3, 5, 7])
-    roi_mode:        str   = _roi.get("default_mode", "polygon")
-    region_points:   list  = []
+    mode:          str            = "upload"
+    video:         Optional[str]  = None
+    camera_id:     int            = 0
+    flip:          bool           = False       
+    model:         str            = _det.get("default_model",   "yolo11n.pt")
+    tracker:       str            = _trk.get("default_tracker", "bytetrack.yaml")
+    confidence:    float          = _det.get("confidence", 0.25)
+    iou:           float          = _det.get("iou",        0.70)
+    classes:       list           = _cls.get("coco_vehicle_ids", [2, 3, 5, 7])
+    roi_mode:      str            = _roi.get("default_mode", "polygon")
+    region_points: list           = []
 
 # ---------------------------------------------------------------------------
 # Routes – pages
@@ -103,8 +103,7 @@ class StartRequest(BaseModel):
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse(request=request,name="index.html")
-
+    return templates.TemplateResponse(request=request, name="index.html")
 
 @app.get("/config")
 async def get_config():
@@ -115,6 +114,7 @@ async def get_config():
 # ---------------------------------------------------------------------------
 
 ALLOWED_VIDEO_EXTS = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
+
 
 @app.post("/upload")
 async def upload_video(file: UploadFile = File(...)):
@@ -140,18 +140,20 @@ async def upload_video(file: UploadFile = File(...)):
 
 
 @app.get("/first_frame")
-async def first_frame(source: str, camera_id: int = 0):
+async def first_frame(source: str, camera_id: int = 0, flip: int = 0):
     """Return base64 JPEG of the first frame from a video file or camera."""
     if source == "camera":
-        cap = cv2.VideoCapture(camera_id)
+        cap = cv2.VideoCapture(camera_id,cv2.CAP_DSHOW)
     else:
-        path = os.path.join(UPL_DIR, source)
-        cap = cv2.VideoCapture(path)
+        cap = cv2.VideoCapture(os.path.join(UPL_DIR, source))
 
     ret, frame = cap.read()
     cap.release()
     if not ret:
         raise HTTPException(status_code=400, detail="Cannot read frame from source.")
+
+    if flip:
+        frame = cv2.flip(frame, 1)
 
     _, buf = cv2.imencode(".jpg", frame)
     return JSONResponse({
@@ -165,16 +167,18 @@ async def first_frame(source: str, camera_id: int = 0):
 # ---------------------------------------------------------------------------
 
 @app.get("/camera_feed")
-def camera_feed():
+def camera_feed(camera_id: int = 0, flip: int = 0):
     def gen():
         app.state.preview_running = True
-        app.state.preview_cap = cv2.VideoCapture(0)
+        app.state.preview_cap     = cv2.VideoCapture(camera_id)
         cap = app.state.preview_cap
         try:
             while app.state.preview_running:
                 ret, frame = cap.read()
                 if not ret:
                     break
+                if flip:
+                    frame = cv2.flip(frame, 1)
                 _, buf = cv2.imencode(".jpg", frame)
                 yield (
                     b"--frame\r\nContent-Type: image/jpeg\r\n\r\n"
@@ -212,7 +216,7 @@ async def start_session(req: StartRequest):
     except RuntimeError as e:
         raise HTTPException(status_code=409, detail=str(e))
 
-    log.info("Session started: %s (mode=%s)", session_id, req.mode)
+    log.info("Session started: %s (mode=%s, flip=%s)", session_id, req.mode, req.flip)
     return JSONResponse({"session_id": session_id, "status": "started"})
 
 
@@ -280,7 +284,7 @@ async def video_feed():
             frame = engine.get_latest_frame()
             if frame:
                 yield boundary + frame + b"\r\n"
-            time.sleep(0.033)   # ~30 fps ceiling
+            time.sleep(0.033)
 
     return StreamingResponse(_gen(), media_type="multipart/x-mixed-replace; boundary=frame")
 
@@ -288,7 +292,7 @@ async def video_feed():
 # Routes – CSV export
 # ---------------------------------------------------------------------------
 
-def _csv_response(session_id: str, filename: str):
+def _csv_response(session_id: str, filename: str) -> FileResponse:
     path = os.path.join(RES_DIR, session_id, filename)
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="File not found.")
@@ -309,7 +313,6 @@ async def export_vehicle_log(session_id: str):
 # ---------------------------------------------------------------------------
 
 def _first_frame_b64(video_path: str) -> str:
-    """Return base64-encoded JPEG of the first frame, or empty string on failure."""
     cap = cv2.VideoCapture(video_path)
     ret, frame = cap.read()
     cap.release()

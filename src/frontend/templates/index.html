@@ -59,6 +59,7 @@
       <!-- ROI Canvas wrapper -->
       <div class="video-wrapper" id="video-wrapper">
         <canvas id="roi-canvas"></canvas>
+        <button id="btn-flip-cam" class="btn btn-secondary"> ↔ </button>
         <img id="video-stream" src="" alt="Video stream" style="display:none;" />
         <div class="video-placeholder" id="video-placeholder">
           <div class="placeholder-icon">🎬</div>
@@ -71,25 +72,17 @@
         <span id="roi-mode-label">Drawing: Polygon</span>
         <span id="roi-point-count">Points: 0</span>
       </div>
-
-      <div class="processing-progress">
+      <div id="processing-section" style="display:none">
         <div class="processing-header">
             <span>Processing Progress</span>
             <span id="processing-percent">0%</span>
         </div>
         <div class="processing-bar-bg">
-            <div
-                id="processing-bar"
-                class="processing-bar-fill">
-            </div>
+            <div id="processing-bar" class="processing-bar-fill"> </div>
         </div>
         <div class="processing-info">
-            <span id="processing-frame">
-                0 / 0 frames
-            </span>
-            <span id="processing-eta">
-                ETA: --
-            </span>
+            <span id="processing-frame">  0 / 0 frames  </span>
+            <span id="processing-eta">  ETA: -- </span>
         </div>
       </div>
     </div>

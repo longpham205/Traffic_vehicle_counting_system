@@ -15,20 +15,23 @@ const ROI  = { LINE: 'line', POLYGON: 'polygon' };
 // STATE
 // =========================================================
 const state = {
-  mode: MODE.UPLOAD,
+  mode:             MODE.UPLOAD,
   uploadedFilename: null,
   uploadedFilePath: null,
-  sessionRunning: false,
-  sessionId: null,
-  roiMode: ROI.POLYGON,
-  roiDrawing: false,
-  roiPoints: [],
-  roiSaved: false,
-  statsInterval: null,
-  streamActive: false,
-  config: {},
-  frameSize: { w: 640, h: 360 },
+  sessionRunning:   false,
+  sessionId:        null,
+  roiMode:          ROI.POLYGON,
+  roiDrawing:       false,
+  roiPoints:        [],
+  roiSaved:         false,
+  statsInterval:    null,
+  streamActive:     false,
+  config:           {},
+  frameSize:        { w: 640, h: 360 },
   firstFrameBase64: null,
+  cameraFlip:       false,     
+  ghostRoiPoints:   null,       
+  ghostRoiMode:     null,
 };
 
 // =========================================================
@@ -55,7 +58,6 @@ async function loadConfig() {
 
     _populateSelect('cfg-model',   state.config.models,   state.config.model);
     _populateSelect('cfg-tracker', state.config.trackers, state.config.tracker);
-
   } catch (err) {
     console.error('Failed to load config:', err);
   }
@@ -130,17 +132,18 @@ const btnPause      = $('btn-pause');
 const btnResume     = $('btn-resume');
 const btnStop       = $('btn-stop');
 const btnPreviewCam = $('btn-preview-camera');
+const btnFlipCam    = $('btn-flip-cam');      
 
 // Stats
-const statIn      = $('stat-in');
-const statOut     = $('stat-out');
-const statTotal   = $('stat-total');
-const statCurrent = $('stat-current');
-const infoModel   = $('info-model');
-const infoTracker = $('info-tracker');
+const statIn       = $('stat-in');
+const statOut      = $('stat-out');
+const statTotal    = $('stat-total');
+const statCurrent  = $('stat-current');
+const infoModel    = $('info-model');
+const infoTracker  = $('info-tracker');
 const infoDuration = $('info-duration');
-const infoFps     = $('info-fps');
-const infoSession = $('info-session');
+const infoFps      = $('info-fps');
+const infoSession  = $('info-session');
 const cpuBar = $('cpu-bar');  const cpuPct = $('cpu-pct');
 const ramBar = $('ram-bar');  const ramPct = $('ram-pct');
 
@@ -176,7 +179,6 @@ const resultVideo      = $('result-video');
 const btnDownloadVideo = $('btn-download-video');
 const btnExportCsv     = $('btn-export-csv');
 
-// Chart
 let vehicleChart = null;
 
 // =========================================================
@@ -185,22 +187,19 @@ let vehicleChart = null;
 function toast(msg, type = 'info', duration = 3000) {
   const el = $('toast');
   el.textContent = msg;
-  el.className = `toast show ${type}`;
+  el.className   = `toast show ${type}`;
   clearTimeout(el._timer);
   el._timer = setTimeout(() => { el.className = 'toast'; }, duration);
 }
 
 // =========================================================
-// LABEL HELPERS  (read from config, fallback to raw value)
+// LABEL HELPERS
 // =========================================================
 function modelLabel(val) {
-  const found = state.config.models?.find(m => m.value === val);
-  return found ? found.name : (val || 'YOLO11n');
+  return state.config.models?.find(m => m.value === val)?.name ?? (val || 'YOLO11n');
 }
-
 function trackerLabel(val) {
-  const found = state.config.trackers?.find(t => t.value === val);
-  return found ? found.name : (val || 'ByteTrack');
+  return state.config.trackers?.find(t => t.value === val)?.name ?? (val || 'ByteTrack');
 }
 
 // =========================================================
@@ -259,6 +258,29 @@ function resizeCanvas() {
 
 function drawRoi() {
   ctx2d.clearRect(0, 0, roiCanvas.width, roiCanvas.height);
+  const ghost = state.ghostRoiPoints;
+  if (ghost?.length >= 2) {
+    ctx2d.save();
+    ctx2d.globalAlpha = 0.3;
+    ctx2d.strokeStyle = '#f59e0b';
+    ctx2d.fillStyle   = 'rgba(245,158,11,0.08)';
+    ctx2d.lineWidth   = 2;
+    ctx2d.setLineDash([6, 4]);
+    ctx2d.beginPath();
+    ctx2d.moveTo(ghost[0][0], ghost[0][1]);
+    for (let i = 1; i < ghost.length; i++) ctx2d.lineTo(ghost[i][0], ghost[i][1]);
+    if (state.ghostRoiMode === ROI.POLYGON && ghost.length > 2) ctx2d.closePath();
+    ctx2d.stroke();
+    if (state.ghostRoiMode === ROI.POLYGON && ghost.length > 2) ctx2d.fill();
+    ghost.forEach(([x, y]) => {
+      ctx2d.beginPath();
+      ctx2d.arc(x, y, 3, 0, Math.PI * 2);
+      ctx2d.fillStyle = '#f59e0b';
+      ctx2d.fill();
+    });
+    ctx2d.setLineDash([]);
+    ctx2d.restore();
+  }
   const pts = state.roiPoints;
   if (pts.length === 0) return;
 
@@ -266,7 +288,6 @@ function drawRoi() {
   ctx2d.fillStyle   = 'rgba(37,99,235,0.12)';
   ctx2d.lineWidth   = 2;
   ctx2d.setLineDash([5, 3]);
-
   ctx2d.beginPath();
   ctx2d.moveTo(pts[0][0], pts[0][1]);
   for (let i = 1; i < pts.length; i++) ctx2d.lineTo(pts[i][0], pts[i][1]);
@@ -350,11 +371,24 @@ function getRoiInVideoCoords() {
   ]);
 }
 
+/** Convert video pixel coords → canvas display coords (ngược lại getRoiInVideoCoords) */
+function videoToCanvasCoords(videoPoints) {
+  const { displayW, displayH, offsetX, offsetY } = getVideoDisplayRect();
+  const { w: vw, h: vh } = state.frameSize;
+  return videoPoints.map(([x, y]) => [
+    (x / vw) * displayW + offsetX,
+    (y / vh) * displayH + offsetY,
+  ]);
+}
+
 // =========================================================
 // MODE SWITCHING
 // =========================================================
 async function switchMode(mode) {
   state.mode = mode;
+
+  if (btnFlipCam) btnFlipCam.style.display = mode === MODE.CAMERA ? 'inline-flex' : 'none';
+
   if (mode === MODE.UPLOAD) {
     try { await fetch('/stop_camera', { method: 'POST' }); } catch (_) {}
     uploadSection.style.display = 'block';
@@ -363,6 +397,7 @@ async function switchMode(mode) {
     clearRoi();
     return;
   }
+
   uploadSection.style.display = 'none';
   cameraSection.style.display = 'flex';
   clearRoi();
@@ -376,7 +411,7 @@ async function uploadVideo(file) {
   const formData = new FormData();
   formData.append('file', file);
   uploadProgress.style.display = 'block';
-  progressBar.style.width = '0%';
+  progressBar.style.width  = '0%';
   progressText.textContent = '0%';
 
   return new Promise((resolve, reject) => {
@@ -391,7 +426,9 @@ async function uploadVideo(file) {
     };
     xhr.onload = () => {
       uploadProgress.style.display = 'none';
-      xhr.status === 200 ? resolve(JSON.parse(xhr.responseText)) : reject(new Error(xhr.responseText));
+      xhr.status === 200
+        ? resolve(JSON.parse(xhr.responseText))
+        : reject(new Error(xhr.responseText));
     };
     xhr.onerror = () => reject(new Error('Upload failed'));
     xhr.send(formData);
@@ -426,20 +463,26 @@ function showFrameOnCanvas(b64) {
 }
 
 function restoreFirstFrame() {
-  if (!state.firstFrameBase64) return;
   videoPlaceholder.style.display = 'none';
   videoStream.style.display      = 'block';
-  videoStream.src = 'data:image/jpeg;base64,' + state.firstFrameBase64;
   roiCanvas.style.pointerEvents  = 'auto';
+
+  if (state.mode === MODE.CAMERA) {
+    startCameraStream();
+  } else {
+    if (!state.firstFrameBase64) return;
+    videoStream.src = 'data:image/jpeg;base64,' + state.firstFrameBase64;
+  }
 }
 
 // =========================================================
 // CAMERA PREVIEW
 // =========================================================
 async function previewCamera() {
-  const id = parseInt(cameraId.value) || 0;
+  const id   = parseInt(cameraId.value) || 0;
+  const flip = state.cameraFlip ? 1 : 0;
   try {
-    const res = await fetch(`/first_frame?source=camera&camera_id=${id}`);
+    const res = await fetch(`/first_frame?source=camera&camera_id=${id}&flip=${flip}`);
     if (!res.ok) throw new Error('Cannot access camera');
     const data = await res.json();
     state.frameSize = { w: data.width, h: data.height };
@@ -451,7 +494,9 @@ async function previewCamera() {
 }
 
 function startCameraStream() {
-  videoStream.src                = '/camera_feed';
+  const id   = parseInt(cameraId?.value) || 0;
+  const flip = state.cameraFlip ? 1 : 0;
+  videoStream.src                = `/camera_feed?camera_id=${id}&flip=${flip}`;
   videoStream.style.display      = 'block';
   videoPlaceholder.style.display = 'none';
 }
@@ -483,14 +528,15 @@ async function startSession() {
     .map(cb => parseInt(cb.value));
 
   const payload = {
-    mode:           state.mode,
-    model:          state.config.model,
-    tracker:        state.config.tracker,
-    confidence:     state.config.confidence,
-    iou:            state.config.iou,
+    mode:          state.mode,
+    model:         state.config.model,
+    tracker:       state.config.tracker,
+    confidence:    state.config.confidence,
+    iou:           state.config.iou,
     classes,
-    roi_mode:       state.config.roi_mode,
-    region_points:  state.roiSaved ? getRoiInVideoCoords() : [],
+    roi_mode:      state.config.roi_mode,
+    region_points: state.roiSaved ? getRoiInVideoCoords() : [],
+    flip:          state.cameraFlip,
   };
 
   if (state.mode === MODE.UPLOAD) {
@@ -506,19 +552,23 @@ async function startSession() {
       await new Promise(r => setTimeout(r, 300));
     }
     const res  = await fetch('/start', {
-      method: 'POST',
+      method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body:    JSON.stringify(payload),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Start failed');
 
     state.sessionId      = data.session_id;
     state.sessionRunning = true;
+    state.ghostRoiPoints = null;
+    state.ghostRoiMode   = null;
     lockUI(true);
     startStream();
     startStatsPolling();
     setStatus('running');
+    const progressSection = $('processing-section');
+    if (progressSection) progressSection.style.display = state.mode === MODE.UPLOAD ? '' : 'none';
     toast('🚀 Session started', 'success');
   } catch (err) {
     toast(`Error: ${err.message}`, 'error');
@@ -529,10 +579,17 @@ async function stopSession() {
   await fetch('/stop', { method: 'POST' });
   state.sessionRunning = false;
   stopStatsPolling();
-  restoreFirstFrame();
+  await _loadGhostRoi(state.sessionId);
   lockUI(false);
   setStatus('stopped');
+  const progressSection = $('processing-section');
+  if (progressSection) progressSection.style.display = 'none';
   toast('⏹ Session stopped', 'warning');
+
+  if (state.mode === MODE.CAMERA) {
+    await new Promise(r => setTimeout(r, 800));
+  }
+  restoreFirstFrame();
   setTimeout(() => showResultSection(), 1500);
 }
 
@@ -550,6 +607,22 @@ async function resumeSession() {
   btnPause.disabled  = false;
   btnResume.disabled = true;
   toast('▶ Resumed', 'success');
+}
+
+// =========================================================
+// GHOST ROI HELPER
+// =========================================================
+async function _loadGhostRoi(sessionId) {
+  if (!sessionId) return;
+  try {
+    const res  = await fetch(`/session/${sessionId}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.region_points?.length) {
+      state.ghostRoiPoints = videoToCanvasCoords(data.region_points);
+      state.ghostRoiMode   = data.roi_mode || ROI.POLYGON;
+    }
+  } catch (_) {}
 }
 
 // =========================================================
@@ -573,7 +646,7 @@ async function fetchStats() {
     if (data.status === 'done' && state.sessionRunning) {
       state.sessionRunning = false;
       stopStatsPolling();
-      restoreFirstFrame();
+      await _loadGhostRoi(state.sessionId);
       lockUI(false);
       setStatus('done');
       clearRoi();
@@ -581,16 +654,25 @@ async function fetchStats() {
       processingPercent.textContent = '100%';
       processingEta.textContent     = 'Completed';
       toast('✅ Processing complete!', 'success');
+      setTimeout(() => {
+        const progressSection = $('processing-section');
+        if (progressSection) progressSection.style.display = 'none';
+      }, 1500);
+
+      if (state.mode === MODE.CAMERA) {
+        await new Promise(r => setTimeout(r, 800));
+      }
+      restoreFirstFrame();
       setTimeout(() => showResultSection(), 1500);
     }
   } catch (_) {}
 }
 
 function applyStats(data) {
-  statIn.textContent      = data.in_count          ?? 0;
-  statOut.textContent     = data.out_count         ?? 0;
-  statTotal.textContent   = data.total_count       ?? 0;
-  statCurrent.textContent = data.current_vehicles  ?? 0;
+  statIn.textContent      = data.in_count         ?? 0;
+  statOut.textContent     = data.out_count        ?? 0;
+  statTotal.textContent   = data.total_count      ?? 0;
+  statCurrent.textContent = data.current_vehicles ?? 0;
 
   infoModel.textContent    = data.model       || '—';
   infoTracker.textContent  = data.tracker     || '—';
@@ -598,7 +680,7 @@ function applyStats(data) {
   infoFps.textContent      = data.fps ? `${data.fps} fps` : '—';
   infoSession.textContent  = data.session_id  || '—';
 
-  hdrFps.textContent     = data.fps   || '—';
+  hdrFps.textContent     = data.fps || '—';
   hdrModel.textContent   = modelLabel(data.model);
   hdrTracker.textContent = trackerLabel(data.tracker);
 
@@ -733,7 +815,6 @@ async function openSessionModal(sessionId) {
     if (!res.ok) { toast('Session data not found', 'error'); return; }
     const data = await res.json();
 
-    // Header
     modalTitle.textContent = data.video_name || sessionId;
     modalVideo.src         = `/result_video/${sessionId}`;
     modalDlVideo.href      = `/result_video/${sessionId}`;
@@ -743,7 +824,6 @@ async function openSessionModal(sessionId) {
     modalDlLog.href        = `/export/vehicle_log/${sessionId}`;
     modalDlLog.download    = 'vehicle_log.csv';
 
-    // Info grid
     const fields = [
       ['Model',      modelLabel(data.model)],
       ['Tracker',    trackerLabel(data.tracker)],
@@ -762,7 +842,6 @@ async function openSessionModal(sessionId) {
       </div>
     `).join('');
 
-    // Vehicle cards + chart
     const counts = data.vehicle_counts || {};
     _renderVehicleCards(counts);
     _buildModalChart(counts);
@@ -809,10 +888,10 @@ function _buildModalChart(counts) {
   const centerTextPlugin = {
     id: 'centerText',
     beforeDraw(chart) {
-      const { ctx } = chart;
-      const values  = chart.data.datasets[0].data;
-      const labels  = chart.data.labels;
-      const total   = values.reduce((a, b) => a + b, 0);
+      const { ctx }  = chart;
+      const values   = chart.data.datasets[0].data;
+      const labels   = chart.data.labels;
+      const total    = values.reduce((a, b) => a + b, 0);
       const cx = (chart.chartArea.left + chart.chartArea.right)  / 2;
       const cy = (chart.chartArea.top  + chart.chartArea.bottom) / 2;
       ctx.save();
@@ -820,20 +899,20 @@ function _buildModalChart(counts) {
       ctx.textBaseline = 'middle';
       if (donutCenterMode === 'total') {
         ctx.fillStyle = '#fff';
-        ctx.font = 'bold 28px Inter';
+        ctx.font      = 'bold 28px Inter';
         ctx.fillText(total, cx, cy - 10);
         ctx.fillStyle = '#8b949e';
-        ctx.font = '12px Inter';
+        ctx.font      = '12px Inter';
         ctx.fillText('Vehicles', cx, cy + 15);
       } else {
         const maxVal = Math.max(...values);
         const maxIdx = values.indexOf(maxVal);
         const pct    = total > 0 ? ((maxVal / total) * 100).toFixed(1) : 0;
         ctx.fillStyle = '#fff';
-        ctx.font = 'bold 28px Inter';
+        ctx.font      = 'bold 28px Inter';
         ctx.fillText(`${pct}%`, cx, cy - 10);
         ctx.fillStyle = '#8b949e';
-        ctx.font = '12px Inter';
+        ctx.font      = '12px Inter';
         ctx.fillText(labels[maxIdx], cx, cy + 15);
       }
       ctx.restore();
@@ -859,26 +938,25 @@ function _buildModalChart(counts) {
           labels: {
             color: '#8b949e', font: { size: 11 }, padding: 10,
             generateLabels(chart) {
-              const data  = chart.data.datasets[0].data;
-              const total = data.reduce((a, b) => a + b, 0);
-              return chart.data.labels.map((label, i) => {
-                const pct = total > 0 ? ((data[i] / total) * 100).toFixed(1) : 0;
-                return {
-                  text: `${label}: (${pct}%)`,
-                  fillStyle:   chart.data.datasets[0].backgroundColor[i],
-                  strokeStyle: chart.data.datasets[0].backgroundColor[i],
-                  fontColor: '#ffffff', hidden: false, index: i,
-                };
-              });
+              const d     = chart.data.datasets[0].data;
+              const total = d.reduce((a, b) => a + b, 0);
+              return chart.data.labels.map((label, i) => ({
+                text:        `${label}: (${total > 0 ? ((d[i] / total) * 100).toFixed(1) : 0}%)`,
+                fillStyle:   chart.data.datasets[0].backgroundColor[i],
+                strokeStyle: chart.data.datasets[0].backgroundColor[i],
+                fontColor:   '#ffffff',
+                hidden:      false,
+                index:       i,
+              }));
             }
           }
         },
         tooltip: {
           callbacks: {
-            label(context) {
-              const total = context.dataset.data.reduce((a, b) => a + b, 0);
-              const pct   = total > 0 ? ((context.raw / total) * 100).toFixed(1) : 0;
-              return `${context.label}: ${context.raw} (${pct}%)`;
+            label(ctx) {
+              const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+              const pct   = total > 0 ? ((ctx.raw / total) * 100).toFixed(1) : 0;
+              return `${ctx.label}: ${ctx.raw} (${pct}%)`;
             }
           }
         }
@@ -886,11 +964,10 @@ function _buildModalChart(counts) {
     }
   });
 
-  // Toggle center display on click inside donut hole
   canvas.onclick = e => {
     if (!modalChartInst) return;
-    const rect   = canvas.getBoundingClientRect();
-    const chart  = modalChartInst;
+    const rect  = canvas.getBoundingClientRect();
+    const chart = modalChartInst;
     const cx = (chart.chartArea.left + chart.chartArea.right)  / 2;
     const cy = (chart.chartArea.top  + chart.chartArea.bottom) / 2;
     const dx = e.clientX - rect.left - cx;
@@ -900,6 +977,11 @@ function _buildModalChart(counts) {
       chart.update();
     }
   };
+}
+
+function closeModal() {
+  modalOverlay.style.display = 'none';
+  modalVideo.src = '';
 }
 
 // =========================================================
@@ -919,11 +1001,27 @@ function bindEvents() {
   });
 
   btnPreviewCam.addEventListener('click', previewCamera);
+  if (btnFlipCam) {
+    btnFlipCam.style.display = 'none';   
+    btnFlipCam.addEventListener('click', () => {
+      state.cameraFlip = !state.cameraFlip;
+      btnFlipCam.classList.toggle('active', state.cameraFlip);
+      if (videoStream.src.includes('/camera_feed')) {
+        startCameraStream();
+      }
+      else if (state.firstFrameBase64 && state.mode === MODE.CAMERA) {
+        previewCamera();
+      }
+      toast(state.cameraFlip ? '↔ Camera flipped' : '↔ Camera normal', 'info');
+    });
+  }
 
   btnDrawRoi.addEventListener('click', () => {
-    state.roiDrawing = true;
-    state.roiPoints  = [];
-    state.roiSaved   = false;
+    state.roiDrawing     = true;
+    state.roiPoints      = [];
+    state.roiSaved       = false;
+    state.ghostRoiPoints = null;  
+    state.ghostRoiMode   = null;
     roiCanvas.classList.add('drawing');
     roiModeLabel.textContent  = `Drawing: ${state.config.roi_mode === ROI.LINE ? 'Line' : 'Polygon'}`;
     roiPointCount.textContent = 'Points: 0';
@@ -937,7 +1035,13 @@ function bindEvents() {
     );
   });
 
-  btnClearRoi.addEventListener('click', () => { clearRoi(); toast('ROI cleared', 'info'); });
+  btnClearRoi.addEventListener('click', () => {
+    state.ghostRoiPoints = null;
+    state.ghostRoiMode   = null;
+    clearRoi();
+    toast('ROI cleared', 'info');
+  });
+
   btnSaveRoi.addEventListener('click', () => {
     if (state.roiPoints.length < 2) { toast('Draw ROI first', 'warning'); return; }
     state.roiSaved   = true;
@@ -967,11 +1071,6 @@ function bindEvents() {
   modalOverlay.addEventListener('click', e => { if (e.target === modalOverlay) closeModal(); });
 
   window.addEventListener('resize', resizeCanvas);
-}
-
-function closeModal() {
-  modalOverlay.style.display = 'none';
-  modalVideo.src = '';
 }
 
 // =========================================================
