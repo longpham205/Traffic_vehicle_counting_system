@@ -438,6 +438,10 @@ async function switchMode(mode) {
     clearRoi();
     return;
   }
+  if (mode === MODE.UPLOAD) {
+    state.ghostRoiPoints = null;
+    state.ghostRoiMode   = null;
+  }
 
   uploadSection.style.display = 'none';
   cameraSection.style.display = 'flex';
@@ -606,6 +610,7 @@ async function startSession() {
     state.ghostRoiMode   = null;
     lockUI(true);
     startStream();
+    clearRoi()
     startStatsPolling();
     setStatus('running');
     const progressSection = $('processing-section');
@@ -1098,6 +1103,8 @@ function bindEvents() {
   });
 
   btnClearRoi.addEventListener('click', () => {
+    state.ghostRoiPoints = null;
+    state.ghostRoiMode   = null;
     clearRoi();
     toast('ROI cleared', 'info');
   });

@@ -136,7 +136,7 @@ class ProcessingSession:
 # ---------------------------------------------------------------------------
 
 class VehicleCountingEngine:
-    _FPS_WINDOW   = 30
+    _FPS_WINDOW   = 30 
     _JPEG_QUALITY = 70
 
     def __init__(self, app_config: dict):
@@ -286,7 +286,7 @@ class VehicleCountingEngine:
         is_video: bool = True,
     ) -> None:
         try:
-            solution  = counter.process(frame)
+            solution  = counter.process(frame) #Important
 
             annotated = getattr(solution, "plot_im", None)
             if annotated is None:
@@ -436,7 +436,6 @@ class VehicleCountingEngine:
                         "direction": "IN",
                         "time": now_iso(),
                     })
-
             if current_out > previous_out:
                 for _ in range(current_out - previous_out):
                     session.log_id += 1
@@ -450,8 +449,9 @@ class VehicleCountingEngine:
             session.prev_out_counts[label] = current_out
     
     # ------------------------------------------------------------------
-    # Private – convert_to_h26
-    # ------------------------------------------------------------------    
+    # Private – convert_to_h26 
+    # ------------------------------------------------------------------  
+    #đổ định ạng video từ mp4v sang h26 đeer xuất vid lên web  
     def _convert_to_h264(self, input_video: str) -> str:
         output_video = input_video.replace("_raw.avi", ".mp4")
         try:
@@ -487,9 +487,6 @@ class VehicleCountingEngine:
 
         if session.output_path and os.path.exists(session.output_path):
             session.output_path = self._convert_to_h264(session.output_path)
-            
-        print("ROI MODE:", session.roi_mode)
-        print("ROI POINTS:", session.region_points)
         
         _det = self.app_config.get("detection", {})
         summary = {

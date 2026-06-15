@@ -7,9 +7,9 @@ system:
   port: 8000
 
 detection:
-  default_model: yolo11n.pt
-  confidence: 0.22
-  iou: 0.8
+  default_model: yolo26n.pt
+  confidence: 0.25
+  iou: 0.7
 
 tracking:
   default_tracker: bytetrack.yaml
@@ -42,16 +42,13 @@ classes:
     - 5   # bus
     - 7   # truck
     - 1   # bicycle
-    - 0   # person
   labels:
-    0: person
     1: bicycle
     2: car
     3: motorcycle
     5: bus
     7: truck
   display:
-    0: { label: Person,     icon: "🚶",  color: "#ef4444", border: "#ef4444" }
     1: { label: Bicycle,    icon: "🚲",  color: "#06b6d4", border: "#06b6d4" }
     2: { label: Car,        icon: "🚗",  color: "#2563eb", border: "#2563eb" }
     3: { label: Motorcycle, icon: "🏍",  color: "#a855f7", border: "#a855f7" }
@@ -59,6 +56,23 @@ classes:
     7: { label: Truck,      icon: "🚛",  color: "#f59e0b", border: "#f59e0b" }
 
 models:
+  # YOLO26
+  - value: yolo26n.pt
+    name: YOLO26n (Fastest CPU)
+
+  - value: yolo26s.pt
+    name: YOLO26s (Balanced + Better Small Objects)
+
+  - value: yolo26m.pt
+    name: YOLO26m (Recommended for Vehicle Counting)
+
+  - value: yolo26l.pt
+    name: YOLO26l (High Accuracy)
+
+  - value: yolo26x.pt
+    name: YOLO26x (Best Accuracy)
+
+#yolo11
   - value: yolo11n.pt
     name: YOLO11n (Fastest)
 
@@ -80,3 +94,6 @@ trackers:
 
   - value: botsort.yaml
     name: BoTSORT
+
+  - value: deepsort.yaml
+    name: DeepSORT
