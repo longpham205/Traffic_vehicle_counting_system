@@ -9,6 +9,7 @@ import threading
 import time
 from pathlib import Path
 from typing import Optional
+import subprocess
 
 import cv2
 import psutil
@@ -258,10 +259,10 @@ class VehicleCountingEngine:
             cap.release()
             return None, None
 
-        out_path = os.path.join(self.output_dir, f"result_{now_ts()}.mp4")
-        session.output_path = out_path
-        fourcc = cv2.VideoWriter_fourcc(*"avc1")
-        writer = cv2.VideoWriter(out_path, fourcc, fps_src, (w, h))
+        raw_path = os.path.join(self.output_dir, f"result_{now_ts()}_raw.avi")
+        session.output_path = raw_path
+        fourcc = cv2.VideoWriter_fourcc(*"XVID")
+        writer = cv2.VideoWriter(raw_path, fourcc, fps_src, (w, h))
         if not writer.isOpened():
             raise RuntimeError("VideoWriter initialization failed. H264 codec may be unavailable.")
 
@@ -411,6 +412,34 @@ class VehicleCountingEngine:
         session.end_time = time.time()
         session.status   = "done"
         self._finalize_session(session, config)
+    
+    # ------------------------------------------------------------------
+    # Private – convert_to_h26
+    # ------------------------------------------------------------------    
+    def _convert_to_h264(self, input_video: str) -> str:
+        output_video = input_video.replace("_raw.avi", ".mp4")
+        try:
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-y",
+                    "-i", input_video,
+                    "-c:v", "libx264",
+                    "-preset", "fast",
+                    "-crf", "23",
+                    output_video,
+                ],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
+            os.remove(input_video)
+            return output_video
+
+        except Exception as e:
+            print(f"[engine] FFmpeg conversion failed: {e}")
+            return input_video
 
     # ------------------------------------------------------------------
     # Private – finalize / save results
@@ -420,6 +449,9 @@ class VehicleCountingEngine:
         folder  = create_session_folder(self.results_dir, session.session_id)
         elapsed = (session.end_time or time.time()) - (session.start_time or time.time())
 
+        if session.output_path and os.path.exists(session.output_path):
+            session.output_path = self._convert_to_h264(session.output_path)
+            
         _det = self.app_config.get("detection", {})
         summary = {
             "session_id":              session.session_id,

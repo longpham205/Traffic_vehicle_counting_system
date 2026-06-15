@@ -7,11 +7,26 @@ import os
 os.environ["OPENCV_FFMPEG_LOGLEVEL"] = "0"
 os.environ["OPENCV_LOG_LEVEL"] = "ERROR"
 os.environ["OPENCV_LOG_LEVEL"] = "SILENT"
+import asyncio
+import sys
+if sys.platform.startswith("win"):
+    asyncio.set_event_loop_policy(
+        asyncio.WindowsSelectorEventLoopPolicy()
+    )
+from contextlib import asynccontextmanager
+@asynccontextmanager
+async def lifespan(app):
+    loop = asyncio.get_running_loop()
+    def exception_handler(loop, context):
+        exc = context.get("exception")
+        if isinstance(exc, ConnectionResetError): return
+        loop.default_exception_handler(context)
+    loop.set_exception_handler(exception_handler)
+    yield
 
 import base64
 import logging
 import shutil
-import sys
 import time
 from pathlib import Path
 from typing import Optional
@@ -39,6 +54,8 @@ ROOT_PROJECT = Path(__file__).resolve().parent.parent
 sys.path.append(str(ROOT_PROJECT))
 SETTINGS.update({"weights_dir": str(ROOT_PROJECT / "models")})
 LOGGER.setLevel(logging.ERROR)
+logging.getLogger("asyncio").setLevel(logging.CRITICAL)
+logging.getLogger("asyncio").setLevel(logging.WARNING)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -67,7 +84,7 @@ _trk = cfg.get("tracking",  {})
 _roi = cfg.get("roi",        {})
 _cls = cfg.get("classes",    {})
 
-app = FastAPI(title="Traffic Vehicle Counting System", version="1.0.0")
+app = FastAPI(title="Traffic Vehicle Counting System", version="1.0.0", lifespan=lifespan)
 
 app.mount("/src/frontend/static", StaticFiles(directory="src/frontend/static"), name="static")
 app.mount("/data/outputs",        StaticFiles(directory=str(OUT_DIR)),           name="outputs")
