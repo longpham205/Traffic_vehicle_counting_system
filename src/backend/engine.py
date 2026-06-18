@@ -88,8 +88,8 @@ class ProcessingSession:
         # Session meta
         _det = app_config.get("detection", {})
         _trk = app_config.get("tracking",  {})
-        self.model_name:   str = session_config.get("model",   _det.get("default_model",   "yolo11n.pt"))
-        self.tracker_name: str = session_config.get("tracker", _trk.get("default_tracker", "bytetrack.yaml"))
+        self.model_name:   str = session_config.get("model",   _det.get("default_model",   "yolo26n.pt"))
+        self.tracker_name: str = session_config.get("tracker", _trk.get("default_tracker", "deepsort.yaml"))
         self.output_path:  Optional[str] = None
         self.video_name:   str = ""
 
@@ -201,8 +201,8 @@ class VehicleCountingEngine:
         _roi = self.app_config.get("roi",        {})
         _cls = self.app_config.get("classes",    {})
 
-        model_name    = config.get("model",   _det.get("default_model",   "yolo11n.pt"))
-        tracker       = config.get("tracker", _trk.get("default_tracker", "bytetrack.yaml"))
+        model_name    = config.get("model",   _det.get("default_model",   "yolo26n.pt"))
+        tracker       = config.get("tracker", _trk.get("default_tracker", "deepsort.yaml"))
         classes       = config.get("classes", _cls.get("coco_vehicle_ids", [2, 3, 5, 7]))
         region_points = config.get("region_points", [])
         roi_mode      = config.get("roi_mode", _roi.get("default_mode", "polygon"))

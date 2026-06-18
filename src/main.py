@@ -106,8 +106,8 @@ class StartRequest(BaseModel):
     video:         Optional[str]  = None
     camera_id:     int            = 0
     flip:          bool           = False       
-    model:         str            = _det.get("default_model",   "yolo11n.pt")
-    tracker:       str            = _trk.get("default_tracker", "bytetrack.yaml")
+    model:         str            = _det.get("default_model",   "yolo26n.pt")
+    tracker:       str            = _trk.get("default_tracker", "deepsort.yaml")
     confidence:    float          = _det.get("confidence", 0.25)
     iou:           float          = _det.get("iou",        0.70)
     classes:       list           = _cls.get("coco_vehicle_ids", [2, 3, 5, 7])
