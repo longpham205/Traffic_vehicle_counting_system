@@ -431,13 +431,17 @@ async function switchMode(mode) {
   if (btnFlipCam) btnFlipCam.style.display = mode === MODE.CAMERA ? 'inline-flex' : 'none';
 
   if (mode === MODE.UPLOAD) {
-    try { await fetch('/stop_camera', { method: 'POST' }); } catch (_) {}
+    state.ghostRoiPoints = null;
+    state.ghostRoiMode   = null;
+    try {
+        await fetch('/stop_camera', { method: 'POST' });
+    } catch (_) {}
     uploadSection.style.display = 'block';
     cameraSection.style.display = 'none';
     hideStream();
     clearRoi();
     return;
-  }
+}
   if (mode === MODE.UPLOAD) {
     state.ghostRoiPoints = null;
     state.ghostRoiMode   = null;
@@ -1076,7 +1080,10 @@ function bindEvents() {
       state.cameraFlip = !state.cameraFlip;
       btnFlipCam.classList.toggle('active', state.cameraFlip);
       if (videoStream.src.includes('/camera_feed')) {
-        startCameraStream();
+          fetch('/stop_camera', { method: 'POST' })
+            .finally(() => {
+                setTimeout(() => startCameraStream(), 200);
+            });
       }
       else if (state.firstFrameBase64 && state.mode === MODE.CAMERA) {
         previewCamera();

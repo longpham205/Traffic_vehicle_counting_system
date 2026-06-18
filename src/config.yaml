@@ -12,7 +12,7 @@ detection:
   iou: 0.7
 
 tracking:
-  default_tracker: bytetrack.yaml
+  default_tracker: deepsort.yaml
 
 roi:
   default_mode: polygon

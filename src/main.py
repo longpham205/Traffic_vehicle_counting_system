@@ -185,6 +185,12 @@ async def first_frame(source: str, camera_id: int = 0, flip: int = 0):
 
 @app.get("/camera_feed")
 def camera_feed(camera_id: int = 0, flip: int = 0):
+    if app.state.preview_cap is not None:
+        try:
+            app.state.preview_cap.release()
+        except:
+            pass
+        app.state.preview_cap = None
     def gen():
         app.state.preview_running = True
         app.state.preview_cap     = cv2.VideoCapture(camera_id)
@@ -212,6 +218,12 @@ def camera_feed(camera_id: int = 0, flip: int = 0):
 @app.post("/stop_camera")
 def stop_camera():
     app.state.preview_running = False
+    if app.state.preview_cap is not None:
+        try:
+            app.state.preview_cap.release()
+        except Exception:
+            pass
+        app.state.preview_cap = None
     return {"status": "stopped"}
 
 # ---------------------------------------------------------------------------
