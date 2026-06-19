@@ -12,7 +12,7 @@ detection:
   iou: 0.7
 
 tracking:
-  default_tracker: deepsort.yaml
+  default_tracker: botsort.yaml
 
 roi:
   default_mode: polygon
@@ -94,6 +94,3 @@ trackers:
 
   - value: botsort.yaml
     name: BoTSORT
-
-  - value: deepsort.yaml
-    name: DeepSORT

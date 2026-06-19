@@ -1,6 +1,6 @@
 # 🚗 Traffic Vehicle Counting System
 
-> A real-time, web-based traffic analysis system powered by YOLO11 and Ultralytics ObjectCounter — built for vehicle detection, tracking, and directional counting via an interactive browser dashboard.
+> A real-time, web-based traffic analysis system powered by YOLO26 and Ultralytics ObjectCounter — built for vehicle detection, tracking, and directional counting via an interactive browser dashboard.
 
 ---
 ## 📌 Table of Contents
@@ -40,7 +40,7 @@ bash run.sh
 ### 🛠️ Option 2 — Manual setup (for development)
 ```bash
 # 1. Clone the repository
-git clone https://github.com/your-username/traffic_vehicle_system.git
+git clone https://github.com/longpham205/Traffic_vehicle_counting_system.git
 cd traffic_vehicle_system
 
 # 2. Create and activate virtual environment
@@ -62,7 +62,7 @@ python main.py
 http://localhost:8000
 ```
 
-> **Note:** YOLO model weights (`yolo11n.pt`, `yolo11s.pt`, `yolo11m.pt`) are downloaded automatically by Ultralytics on first run. An internet connection is required for the initial download only.
+> **Note:** YOLO model weights (`yolo26n.pt`, `yolo26s.pt`, `yolo26m.pt`) are downloaded automatically by Ultralytics on first run. An internet connection is required for the initial download only.
 
 ---
 
@@ -97,7 +97,7 @@ The system requires no database. All session data is persisted as JSON and CSV f
 - No hardcoded regions — fully dynamic per session
 
 ### 🔍 Detection & Tracking
-- YOLO11 models: Nano, Small, or Medium
+- YOLO26 models: Nano, Small, or Medium
 - Trackers: ByteTrack or BoTSORT
 - Configurable confidence threshold and IoU threshold
 - Class filtering: Car, Motorcycle, Bus, Truck, Bicycle, Person
@@ -155,7 +155,7 @@ Frontend (JS) ──POST /start──► FastAPI (main.py)
 The user-drawn ROI is converted from canvas coordinates to actual video pixel coordinates before being sent to the backend. ObjectCounter uses this region to determine when a tracked object crosses the boundary, assigning a direction (IN or OUT) based on which side the object came from.
 
 ### Detection Flow
-Each frame is passed through the YOLO11 model using `ObjectCounter()`, which runs detection and associates detections to existing tracks using the selected tracker (ByteTrack or BoTSORT). Only the configured class IDs are detected.
+Each frame is passed through the YOLO26 model using `ObjectCounter()`, which runs detection and associates detections to existing tracks using the selected tracker (ByteTrack or BoTSORT). Only the configured class IDs are detected.
 
 ### Tracking Flow
 ByteTrack and BoTSORT maintain a unique `track_id` for each object across frames using motion prediction and re-identification. This ensures that each vehicle is counted only once even if it temporarily disappears from view.
@@ -217,7 +217,7 @@ traffic_vehicle_system
 │   ├── outputs          # Contains the processed video output (video output with bounding boxes and counting).
 │   └── uploads          # Save user-uploaded videos before processing.
 │
-├── models               # Contains YOLO model weights (yolo11n/s/m.pt hoặc tự download lần đầu)
+├── models               # Contains YOLO model weights (yolo26n/s/m.pt hoặc tự download lần đầu)
 │
 ├── results              # Save all results by session.
 │                        # Each session includes: summary.json, statistics.csv, vehicle_log.csv
@@ -387,7 +387,7 @@ All defaults are stored in `config.yaml`. Runtime configuration is done through 
 
 | Option | Values | Default | Description |
 |--------|--------|---------|-------------|
-| **Model** | `yolo11n.pt`, `yolo11s.pt`, `yolo11m.pt` | `yolo11n.pt` | YOLO11 variant. Nano is fastest; Medium is most accurate |
+| **Model** | `yolo26n.pt`, `yolo26s.pt`, `yolo26m.pt` | `yolo26n.pt` | YOLO26 variant. Nano is fastest; Medium is most accurate |
 | **Tracker** | `bytetrack.yaml`, `botsort.yaml` | `bytetrack.yaml` | Tracking algorithm. ByteTrack is faster; BoTSORT is more robust in crowded scenes |
 | **Confidence** | 0.1 – 0.9 | `0.25` | Minimum detection confidence. Lower = more detections, more false positives |
 | **IoU** | 0.1 – 0.9 | `0.70` | Intersection over Union threshold for NMS. Higher = stricter duplicate filtering |
@@ -419,7 +419,7 @@ Full session record including video name, model, tracker, confidence, IoU, IN co
 {
   "session_id": "session_20260611_230145",
   "video_name": "highway.mp4",
-  "model": "yolo11n.pt",
+  "model": "yolo26n.pt",
   "tracker": "bytetrack.yaml",
   "confidence": 0.25,
   "iou": 0.7,
@@ -457,7 +457,7 @@ track_id,type,direction,time
 ## 11. 🧠 Core Algorithm
 
 ### YOLO Detection
-Each video frame is passed to a YOLO11 model, which outputs bounding boxes, class labels, and confidence scores for all detected objects. Only objects matching the configured class IDs and above the confidence threshold are kept.
+Each video frame is passed to a YOLO26 model, which outputs bounding boxes, class labels, and confidence scores for all detected objects. Only objects matching the configured class IDs and above the confidence threshold are kept.
 
 ### Object Tracking
 The tracking algorithm (ByteTrack or BoTSORT) receives the per-frame detections and maintains a persistent identity (`track_id`) for each object across frames. ByteTrack associates detections using IoU-based matching and a Kalman filter for motion prediction. BoTSORT adds appearance-based re-identification, making it more robust when objects briefly disappear or overlap.
@@ -472,7 +472,7 @@ When a centroid crosses the ROI, the direction of movement relative to the ROI n
 
 ## 12. ⚠️ Limitations
 
-- **CPU performance:** Processing speed is significantly slower on CPU-only machines. High-resolution videos or complex scenes may run below real-time speed. YOLO11n is recommended for CPU use.
+- **CPU performance:** Processing speed is significantly slower on CPU-only machines. High-resolution videos or complex scenes may run below real-time speed. YOLO26n is recommended for CPU use.
 - **Tracking errors under occlusion:** When vehicles overlap for extended periods, trackers may lose or swap identities, leading to occasional double-counting or missed counts.
 - **Real-time lag:** The MJPEG stream displayed in the browser may lag several frames behind the actual processing, especially on slower machines.
 - **Single session constraint:** Only one processing session can run at a time. Starting a new session requires stopping the current one.
